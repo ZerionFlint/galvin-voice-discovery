@@ -106,6 +106,29 @@
     background:#fff;
   }
 
+  .emailField{
+    display:flex;
+    align-items:stretch;
+    width:100%;
+  }
+
+  .emailField input{
+    min-width:0;
+    border-radius:10px 0 0 10px;
+  }
+
+  .emailSuffix{
+    display:flex;
+    align-items:center;
+    padding:0 12px;
+    border:1px solid #aeb8c5;
+    border-left:0;
+    border-radius:0 10px 10px 0;
+    background:#eef1f6;
+    font-size:17px;
+    white-space:nowrap;
+  }
+
   button{
     font:inherit;
     font-weight:700;
@@ -308,28 +331,17 @@
 
 </div>
 
-<!--
-  The Apps Script backend responds inside this hidden iframe,
-  then sends a postMessage back to this student page.
--->
-<iframe
-  id="apiFrame"
-  name="apiFrame"
-  class="hidden">
-</iframe>
 
 
 <script>
 
 /********************************************************************
- * TEACHER SETUP
+ * CONNECTION
  *
- * After Backend_Code.txt is deployed as an Apps Script Web App,
- * replace the placeholder below with the URL ending in /exec.
+ * Students must start from the authenticated Apps Script launcher.
+ * The launcher opens this GitHub microphone page in a new tab and
+ * securely relays requests to Apps Script using window.postMessage.
  ********************************************************************/
-
-const API_URL =
-  'https://script.google.com/a/macros/wpsk12.org/s/AKfycbxrcplVSsVwWj4eajNXNdfeVewW94J5-7ftXzO61w6ewpTMJY0SCSlitFND5iIbKs_c8g/exec';
 
 
 /********************************************************************
@@ -515,17 +527,13 @@ function api(action, payload){
 
   payload = payload || {};
 
-  if (
-    !API_URL ||
-    API_URL.indexOf('PASTE_') >= 0
-  ){
+  if (!window.opener || window.opener.closed){
     return Promise.reject(
       new Error(
-        'Teacher setup is not finished: the backend URL is missing.'
+        'Please start Voice Discovery from the school Voice Discovery link in Google Classroom.'
       )
     );
   }
-
 
   return new Promise(
     function(resolve, reject){
@@ -536,68 +544,35 @@ function api(action, payload){
         '_' +
         (++reqSeq);
 
-
       pending[reqId] = {
         resolve:resolve,
         reject:reject
       };
 
-
-      const form =
-        document.createElement('form');
-
-      form.method = 'POST';
-      form.action = API_URL;
-      form.target = 'apiFrame';
-      form.className = 'hidden';
-
-
-      const input =
-        document.createElement('input');
-
-      input.type = 'hidden';
-      input.name = 'payload';
-      input.value =
-        JSON.stringify(
-          Object.assign(
-            {
-              action:action,
-              reqId:reqId
-            },
+      window.opener.postMessage(
+        {
+          source:'galvin-vd-student',
+          reqId:reqId,
+          request:Object.assign(
+            {action:action},
             payload
           )
-        );
-
-
-      form.appendChild(input);
-      document.body.appendChild(form);
-      form.submit();
-
-
-      setTimeout(
-        function(){
-          form.remove();
         },
-        1000
+        '*'
       );
 
-
       setTimeout(
         function(){
-
           if (pending[reqId]){
-
             delete pending[reqId];
-
             reject(
               new Error(
-                'The school data service did not respond. Check your internet connection and try again.'
+                'The school connection did not respond. Make sure the original Galvin Voice Discovery tab is still open.'
               )
             );
           }
-
         },
-        45000
+        60000
       );
     }
   );
@@ -640,13 +615,21 @@ function showWelcome(){
     <div class="card">
 
       <label>
-        Student ID
+        School email
       </label>
 
-      <input
-        id="studentId"
-        inputmode="numeric"
-        autocomplete="off">
+      <div class="emailField">
+        <input
+          id="studentId"
+          inputmode="numeric"
+          autocomplete="off"
+          placeholder="student number">
+        <span class="emailSuffix">@wpsstudent.org</span>
+      </div>
+
+      <p class="small">
+        Type only the numbers before @wpsstudent.org.
+      </p>
 
 
       <label>
