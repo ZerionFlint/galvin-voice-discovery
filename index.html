@@ -931,6 +931,15 @@ async function enableMic(){
         window.webkitAudioContext
       )();
 
+    // Chrome may create Web Audio in a suspended state after the
+    // permission prompt. Try to activate it now; runMicTest() tries
+    // again from its own button click before validating signal level.
+    try{
+      if (state.audioCtx.state === 'suspended'){
+        await state.audioCtx.resume();
+      }
+    } catch(e){}
+
 
     const source =
       state.audioCtx
@@ -962,7 +971,7 @@ async function enableMic(){
       </div>
 
       <p>
-        Say “hello” normally while you watch the meter.
+        Click <b>Test microphone</b>, then say “hello” normally while you watch the meter.
       </p>
 
       <div class="meter">
@@ -975,7 +984,7 @@ async function enableMic(){
           class="good"
           onclick="runMicTest()">
 
-          Test recording — I will not hear it
+          Test microphone
 
         </button>
 
@@ -1088,6 +1097,14 @@ async function runMicTest(){
       'testMsg'
     );
 
+  // This button click is a fresh user gesture, so it is the most
+  // reliable place to wake Chrome's Web Audio analyser.
+  try{
+    if (state.audioCtx && state.audioCtx.state === 'suspended'){
+      await state.audioCtx.resume();
+    }
+  } catch(e){}
+
 
   msg.innerHTML =
     '<div class="status warn">' +
@@ -1104,9 +1121,17 @@ async function runMicTest(){
       );
 
 
+    const analyserRunning =
+      state.audioCtx &&
+      state.audioCtx.state === 'running';
+
+    const signalTooQuiet =
+      analyserRunning &&
+      recording.maxLevel < 0.0025;
+
     if (
-      recording.maxLevel < 0.008 ||
-      recording.blob.size < 800
+      recording.blob.size < 800 ||
+      signalTooQuiet
     ){
 
       msg.innerHTML =
