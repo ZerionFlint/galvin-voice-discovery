@@ -1,0 +1,3618 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galvin Chorus Voice Discovery</title>
+
+<style>
+  :root{
+    --ink:#18212f;
+    --muted:#667085;
+    --line:#d9e0e8;
+    --card:#ffffff;
+    --bg:#f4f7fb;
+    --accent:#3456d1;
+    --accent2:#eef2ff;
+    --ok:#147a52;
+    --okbg:#ecfdf3;
+    --warn:#9a6700;
+    --warnbg:#fff8db;
+    --bad:#b42318;
+    --badbg:#fff0ee;
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    font-family:Arial,Helvetica,sans-serif;
+    background:var(--bg);
+    color:var(--ink);
+  }
+
+  .wrap{
+    max-width:820px;
+    margin:0 auto;
+    padding:20px 14px 60px;
+  }
+
+  .brand{
+    font-weight:800;
+    font-size:13px;
+    letter-spacing:.08em;
+    color:var(--accent);
+    text-transform:uppercase;
+    margin-bottom:8px;
+  }
+
+  h1{
+    font-size:30px;
+    margin:0 0 8px;
+  }
+
+  h2{
+    font-size:24px;
+    margin:0 0 10px;
+  }
+
+  h3{
+    font-size:19px;
+    margin:0 0 8px;
+  }
+
+  p{line-height:1.5}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:16px;
+    padding:22px;
+    margin-top:16px;
+    box-shadow:0 2px 10px rgba(16,24,40,.04);
+  }
+
+  .soft{background:var(--accent2)}
+  .muted{color:var(--muted)}
+  .small{font-size:13px;color:var(--muted)}
+
+  .progress{
+    height:8px;
+    background:#e7ebf1;
+    border-radius:999px;
+    overflow:hidden;
+    margin:16px 0 22px;
+  }
+
+  .progress>div{
+    height:100%;
+    background:var(--accent);
+    width:5%;
+    transition:width .25s;
+  }
+
+  label{
+    display:block;
+    font-weight:700;
+    margin:14px 0 6px;
+  }
+
+  input{
+    width:100%;
+    font-size:17px;
+    padding:12px 13px;
+    border:1px solid #aeb8c5;
+    border-radius:10px;
+    background:#fff;
+  }
+
+  button{
+    font:inherit;
+    font-weight:700;
+    border:0;
+    border-radius:11px;
+    padding:13px 18px;
+    cursor:pointer;
+  }
+
+  button.primary{
+    background:var(--accent);
+    color:#fff;
+  }
+
+  button.secondary{
+    background:#e9edf3;
+    color:var(--ink);
+  }
+
+  button.good{
+    background:var(--ok);
+    color:#fff;
+  }
+
+  button:disabled{
+    opacity:.45;
+    cursor:not-allowed;
+  }
+
+  .btnrow{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:18px;
+  }
+
+  .bigbtn{
+    font-size:19px;
+    padding:16px 22px;
+  }
+
+  .status{
+    border-radius:11px;
+    padding:12px 14px;
+    margin-top:13px;
+  }
+
+  .status.ok{
+    background:var(--okbg);
+    color:var(--ok);
+  }
+
+  .status.warn{
+    background:var(--warnbg);
+    color:var(--warn);
+  }
+
+  .status.bad{
+    background:var(--badbg);
+    color:var(--bad);
+  }
+
+  .hidden{display:none!important}
+
+  .meter{
+    height:18px;
+    background:#e5e9ef;
+    border-radius:999px;
+    overflow:hidden;
+    margin:12px 0;
+  }
+
+  .meter>div{
+    height:100%;
+    width:0;
+    background:var(--ok);
+    transition:width .08s;
+  }
+
+  .countdown{
+    font-size:52px;
+    font-weight:800;
+    text-align:center;
+    padding:20px;
+  }
+
+  .recording{
+    font-size:20px;
+    font-weight:800;
+    color:var(--bad);
+    display:flex;
+    gap:9px;
+    align-items:center;
+    flex-wrap:wrap;
+  }
+
+  .dot{
+    width:13px;
+    height:13px;
+    border-radius:50%;
+    background:var(--bad);
+    animation:pulse 1s infinite;
+  }
+
+  @keyframes pulse{
+    50%{opacity:.35}
+  }
+
+  .comforts{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    margin-top:14px;
+  }
+
+  .comforts button{
+    background:#eef1f6;
+    color:var(--ink);
+    padding:14px;
+  }
+
+  .comforts button.stop{
+    background:#fff0ee;
+    color:var(--bad);
+  }
+
+  .contourWrap{
+    background:#fbfcfe;
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:10px;
+    margin:15px 0;
+  }
+
+  svg{
+    width:100%;
+    height:auto;
+    display:block;
+  }
+
+  .contourLine{
+    fill:none;
+    stroke:#aab4c2;
+    stroke-width:3;
+  }
+
+  .noteCircle{
+    fill:#fff;
+    stroke:#8793a4;
+    stroke-width:2;
+  }
+
+  .noteCircle.active{
+    fill:#dbe5ff;
+    stroke:var(--accent);
+    stroke-width:4;
+  }
+
+  .solfegeText{
+    font-size:17px;
+    font-weight:800;
+    text-anchor:middle;
+    dominant-baseline:central;
+    fill:var(--ink);
+  }
+
+  .stepTitle{
+    font-weight:800;
+    color:var(--accent);
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+  }
+
+  @media(max-width:560px){
+    h1{font-size:26px}
+    .comforts{grid-template-columns:1fr}
+    .card{padding:17px}
+  }
+</style>
+</head>
+
+<body>
+
+<div class="wrap">
+
+  <div class="brand">
+    Galvin Chorus
+  </div>
+
+  <h1>
+    Private Voice Discovery
+  </h1>
+
+  <div class="progress">
+    <div id="progressBar"></div>
+  </div>
+
+  <main id="app"></main>
+
+</div>
+
+<!--
+  The Apps Script backend responds inside this hidden iframe,
+  then sends a postMessage back to this student page.
+-->
+<iframe
+  id="apiFrame"
+  name="apiFrame"
+  class="hidden">
+</iframe>
+
+
+<script>
+
+/********************************************************************
+ * TEACHER SETUP
+ *
+ * After Backend_Code.txt is deployed as an Apps Script Web App,
+ * replace the placeholder below with the URL ending in /exec.
+ ********************************************************************/
+
+const API_URL =
+  'https://script.google.com/a/macros/wpsk12.org/s/AKfycbxrcplVSsVwWj4eajNXNdfeVewW94J5-7ftXzO61w6ewpTMJY0SCSlitFND5iIbKs_c8g/exec';
+
+
+/********************************************************************
+ * MUSICAL SETTINGS
+ ********************************************************************/
+
+const TEMPO = 84;
+
+const SCALE_INTERVALS =
+  [0,2,4,5,7,5,4,2,0];
+
+const SCALE_SOLFEGE =
+  ['Do','Re','Mi','Fa','Sol','Fa','Mi','Re','Do'];
+
+const LEAP_INTERVALS =
+  [0,4,7,4,0];
+
+const LEAP_SOLFEGE =
+  ['Do','Mi','Sol','Mi','Do'];
+
+
+/*
+ * These are STARTING PITCHES for movable-Do patterns.
+ * Students never need to see these note names.
+ */
+const NOTE_TO_MIDI = {
+  'G2':43,
+  'A2':45,
+  'Bb2':46,
+
+  'C3':48,
+  'D3':50,
+  'Eb3':51,
+  'F3':53,
+  'G3':55,
+  'A3':57,
+  'Bb3':58,
+
+  'C4':60,
+  'D4':62,
+  'Eb4':63,
+  'F4':65,
+  'G4':67,
+  'A4':69,
+  'Bb4':70,
+
+  'C5':72,
+  'D5':74,
+  'Eb5':75,
+  'F5':77
+};
+
+
+/********************************************************************
+ * STATE
+ ********************************************************************/
+
+let state = {
+  studentId:'',
+  lastName:'',
+  enrollment:null,
+  submissionCode:'',
+
+  stream:null,
+  audioCtx:null,
+  analyser:null,
+  meterRAF:null,
+
+  patternHistory:[],
+  samplesSaved:0
+};
+
+let pending = {};
+let reqSeq = 0;
+
+const TOTAL_STEPS = 8;
+
+
+/********************************************************************
+ * GENERAL HELPERS
+ ********************************************************************/
+
+function app(){
+  return document.getElementById('app');
+}
+
+
+function esc(s){
+  return String(s || '')
+    .replace(
+      /[&<>'"]/g,
+      function(c){
+        return {
+          '&':'&amp;',
+          '<':'&lt;',
+          '>':'&gt;',
+          "'":'&#39;',
+          '"':'&quot;'
+        }[c];
+      }
+    );
+}
+
+
+function setProgress(n){
+  document.getElementById('progressBar')
+    .style.width =
+    Math.max(
+      5,
+      Math.round(n / TOTAL_STEPS * 100)
+    ) + '%';
+}
+
+
+function sleep(ms){
+  return new Promise(
+    function(resolve){
+      setTimeout(resolve, ms);
+    }
+  );
+}
+
+
+function disableButtons(){
+  document.querySelectorAll('button')
+    .forEach(
+      function(button){
+        button.disabled = true;
+      }
+    );
+}
+
+
+/********************************************************************
+ * APPS SCRIPT BACKEND BRIDGE
+ ********************************************************************/
+
+window.addEventListener(
+  'message',
+  function(event){
+
+    const message = event.data;
+
+    if (
+      !message ||
+      message.source !== 'galvin-vd-backend' ||
+      !message.reqId
+    ){
+      return;
+    }
+
+    const slot =
+      pending[message.reqId];
+
+    if (!slot){
+      return;
+    }
+
+    delete pending[message.reqId];
+
+    if (
+      message.response &&
+      message.response.ok
+    ){
+      slot.resolve(
+        message.response.data
+      );
+    } else {
+      slot.reject(
+        new Error(
+          message.response &&
+          message.response.error
+            ? message.response.error
+            : 'Backend error.'
+        )
+      );
+    }
+  }
+);
+
+
+function api(action, payload){
+
+  payload = payload || {};
+
+  if (
+    !API_URL ||
+    API_URL.indexOf('PASTE_') >= 0
+  ){
+    return Promise.reject(
+      new Error(
+        'Teacher setup is not finished: the backend URL is missing.'
+      )
+    );
+  }
+
+
+  return new Promise(
+    function(resolve, reject){
+
+      const reqId =
+        'r' +
+        Date.now() +
+        '_' +
+        (++reqSeq);
+
+
+      pending[reqId] = {
+        resolve:resolve,
+        reject:reject
+      };
+
+
+      const form =
+        document.createElement('form');
+
+      form.method = 'POST';
+      form.action = API_URL;
+      form.target = 'apiFrame';
+      form.className = 'hidden';
+
+
+      const input =
+        document.createElement('input');
+
+      input.type = 'hidden';
+      input.name = 'payload';
+      input.value =
+        JSON.stringify(
+          Object.assign(
+            {
+              action:action,
+              reqId:reqId
+            },
+            payload
+          )
+        );
+
+
+      form.appendChild(input);
+      document.body.appendChild(form);
+      form.submit();
+
+
+      setTimeout(
+        function(){
+          form.remove();
+        },
+        1000
+      );
+
+
+      setTimeout(
+        function(){
+
+          if (pending[reqId]){
+
+            delete pending[reqId];
+
+            reject(
+              new Error(
+                'The school data service did not respond. Check your internet connection and try again.'
+              )
+            );
+          }
+
+        },
+        45000
+      );
+    }
+  );
+}
+
+
+/********************************************************************
+ * WELCOME / STUDENT IDENTITY
+ ********************************************************************/
+
+function showWelcome(){
+
+  setProgress(1);
+
+  app().innerHTML = `
+
+    <div class="card soft">
+
+      <h2>
+        This is private — and it is not an audition.
+      </h2>
+
+      <p>
+        We are finding where your voice feels comfortable
+        <b>right now</b>.
+        Middle-school voices change, and there is no
+        “good” or “bad” result.
+      </p>
+
+      <p>
+        <b>
+          You will not have to listen to your own recording.
+        </b>
+        You may skip or stop if anything feels uncomfortable.
+      </p>
+
+    </div>
+
+
+    <div class="card">
+
+      <label>
+        Student ID
+      </label>
+
+      <input
+        id="studentId"
+        inputmode="numeric"
+        autocomplete="off">
+
+
+      <label>
+        Last name
+      </label>
+
+      <input
+        id="lastName"
+        autocomplete="family-name">
+
+
+      <div class="btnrow">
+
+        <button
+          class="primary bigbtn"
+          onclick="lookup()">
+
+          Continue
+
+        </button>
+
+      </div>
+
+      <div id="startMsg"></div>
+
+    </div>
+  `;
+}
+
+
+async function lookup(){
+
+  const studentId =
+    document
+      .getElementById('studentId')
+      .value
+      .trim();
+
+  const lastName =
+    document
+      .getElementById('lastName')
+      .value
+      .trim();
+
+  const msg =
+    document.getElementById('startMsg');
+
+
+  if (
+    !studentId ||
+    !lastName
+  ){
+
+    msg.innerHTML =
+      '<div class="status warn">' +
+      'Enter both fields.' +
+      '</div>';
+
+    return;
+  }
+
+
+  msg.innerHTML =
+    '<div class="status warn">' +
+    'Checking your chorus class…' +
+    '</div>';
+
+
+  try{
+
+    const res =
+      await api(
+        'lookup',
+        {
+          studentId:studentId,
+          lastName:lastName
+        }
+      );
+
+
+    state.studentId =
+      studentId;
+
+    state.lastName =
+      lastName;
+
+
+    showEnrollmentChoices(
+      res.matches
+    );
+
+  } catch(err){
+
+    msg.innerHTML =
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>';
+  }
+}
+
+
+function showEnrollmentChoices(matches){
+
+  const buttons =
+    matches
+      .map(
+        function(match){
+
+          return `
+
+            <button
+              class="secondary"
+              style="
+                text-align:left;
+                width:100%;
+                margin:6px 0;
+              "
+              onclick='chooseEnrollment(${JSON.stringify(match)})'>
+
+              <b>
+                ${esc(match.firstName)}
+              </b>
+
+              <br>
+
+              <span class="small">
+                ${esc(match.label)}
+              </span>
+
+            </button>
+          `;
+        }
+      )
+      .join('');
+
+
+  app().innerHTML = `
+
+    <div class="card">
+
+      <h2>
+        Is this your chorus class?
+      </h2>
+
+      ${buttons}
+
+      <div class="btnrow">
+
+        <button
+          class="secondary"
+          onclick="showWelcome()">
+
+          Go back
+
+        </button>
+
+      </div>
+
+    </div>
+  `;
+}
+
+
+async function chooseEnrollment(match){
+
+  state.enrollment =
+    match;
+
+
+  app().innerHTML =
+    '<div class="card">' +
+    '<h2>Getting your private voice check ready…</h2>' +
+    '</div>';
+
+
+  try{
+
+    const res =
+      await api(
+        'start',
+        {
+          studentId:
+            state.studentId,
+
+          lastName:
+            state.lastName,
+
+          enrollmentId:
+            match.enrollmentId
+        }
+      );
+
+
+    state.submissionCode =
+      res.submissionCode;
+
+
+    showMicSetup(
+      res.firstName
+    );
+
+  } catch(err){
+
+    app().innerHTML =
+
+      '<div class="card">' +
+
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>' +
+
+      '<div class="btnrow">' +
+
+      '<button class="secondary" onclick="showWelcome()">' +
+      'Start over' +
+      '</button>' +
+
+      '</div>' +
+
+      '</div>';
+  }
+}
+
+
+/********************************************************************
+ * MICROPHONE SETUP
+ ********************************************************************/
+
+function showMicSetup(firstName){
+
+  setProgress(2);
+
+  app().innerHTML = `
+
+    <div class="card">
+
+      <div class="stepTitle">
+        Step 1 — Microphone
+      </div>
+
+      <h2>
+        Hi ${esc(firstName)}.
+        First, let’s make sure your microphone works.
+      </h2>
+
+      <p>
+        Click <b>Enable microphone</b>.
+        When Chrome asks, choose <b>Allow</b>.
+      </p>
+
+      <p class="muted">
+        You will not hear your own recorded voice.
+      </p>
+
+      <div class="btnrow">
+
+        <button
+          class="primary bigbtn"
+          onclick="enableMic()">
+
+          Enable microphone
+
+        </button>
+
+      </div>
+
+      <div id="micArea"></div>
+
+    </div>
+  `;
+}
+
+
+async function enableMic(){
+
+  const area =
+    document.getElementById('micArea');
+
+
+  try{
+
+    state.stream =
+      await navigator
+        .mediaDevices
+        .getUserMedia(
+          {
+            audio:{
+              echoCancellation:true,
+              noiseSuppression:false,
+              autoGainControl:false
+            }
+          }
+        );
+
+
+    state.audioCtx =
+      new (
+        window.AudioContext ||
+        window.webkitAudioContext
+      )();
+
+
+    const source =
+      state.audioCtx
+        .createMediaStreamSource(
+          state.stream
+        );
+
+
+    state.analyser =
+      state.audioCtx
+        .createAnalyser();
+
+
+    state.analyser.fftSize =
+      512;
+
+
+    source.connect(
+      state.analyser
+    );
+
+
+    area.innerHTML = `
+
+      <div class="status ok">
+        <b>
+          Microphone allowed ✓
+        </b>
+      </div>
+
+      <p>
+        Say “hello” normally while you watch the meter.
+      </p>
+
+      <div class="meter">
+        <div id="meterFill"></div>
+      </div>
+
+      <div class="btnrow">
+
+        <button
+          class="good"
+          onclick="runMicTest()">
+
+          Test recording — I will not hear it
+
+        </button>
+
+      </div>
+
+      <div id="testMsg"></div>
+    `;
+
+
+    runMeter();
+
+  } catch(err){
+
+    area.innerHTML = `
+
+      <div class="status bad">
+
+        <b>
+          Microphone is blocked.
+        </b>
+
+        <br>
+
+        Click the site-controls icon next to the web address
+        → allow <b>Microphone</b>
+        → reload this page.
+
+      </div>
+
+      <p class="small">
+        If your Chromebook will not let you change it,
+        tell Mr. Zini.
+        You will get another private option.
+      </p>
+    `;
+  }
+}
+
+
+function runMeter(){
+
+  cancelAnimationFrame(
+    state.meterRAF
+  );
+
+
+  const data =
+    new Uint8Array(
+      state.analyser.fftSize
+    );
+
+
+  function tick(){
+
+    state.analyser
+      .getByteTimeDomainData(
+        data
+      );
+
+
+    let sum = 0;
+
+
+    for (const value of data){
+
+      const x =
+        (value - 128) / 128;
+
+      sum += x * x;
+    }
+
+
+    const rms =
+      Math.sqrt(
+        sum / data.length
+      );
+
+
+    const fill =
+      document.getElementById(
+        'meterFill'
+      );
+
+
+    if (fill){
+
+      fill.style.width =
+        Math.min(
+          100,
+          rms * 550
+        ) + '%';
+    }
+
+
+    state.meterRAF =
+      requestAnimationFrame(
+        tick
+      );
+  }
+
+
+  tick();
+}
+
+
+async function runMicTest(){
+
+  const msg =
+    document.getElementById(
+      'testMsg'
+    );
+
+
+  msg.innerHTML =
+    '<div class="status warn">' +
+    'Say “hello” now…' +
+    '</div>';
+
+
+  try{
+
+    const recording =
+      await captureAudio(
+        2.5,
+        false
+      );
+
+
+    if (
+      recording.maxLevel < 0.008 ||
+      recording.blob.size < 800
+    ){
+
+      msg.innerHTML =
+
+        '<div class="status warn">' +
+
+        'I did not hear much sound. ' +
+        'Move a little closer and try once more.' +
+
+        '</div>';
+
+      return;
+    }
+
+
+    msg.innerHTML =
+
+      '<div class="status ok">' +
+
+      '<b>Microphone working ✓</b> ' +
+
+      'Your test was captured. ' +
+      'It was not saved and you do not need to hear it.' +
+
+      '</div>' +
+
+      '<div class="btnrow">' +
+
+      '<button class="primary bigbtn" onclick="showSpeech()">' +
+
+      'Start Voice Discovery' +
+
+      '</button>' +
+
+      '</div>';
+
+  } catch(err){
+
+    msg.innerHTML =
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>';
+  }
+}
+
+
+/********************************************************************
+ * RECORDING ENGINE
+ ********************************************************************/
+
+function recorderMime(){
+
+  const options = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus'
+  ];
+
+
+  for (const type of options){
+
+    if (
+      window.MediaRecorder &&
+      MediaRecorder.isTypeSupported(type)
+    ){
+      return type;
+    }
+  }
+
+
+  return '';
+}
+
+
+function currentLevel(){
+
+  if (!state.analyser){
+    return 0;
+  }
+
+
+  const data =
+    new Uint8Array(
+      state.analyser.fftSize
+    );
+
+
+  state.analyser
+    .getByteTimeDomainData(
+      data
+    );
+
+
+  let sum = 0;
+
+
+  for (const value of data){
+
+    const x =
+      (value - 128) / 128;
+
+    sum += x * x;
+  }
+
+
+  return Math.sqrt(
+    sum / data.length
+  );
+}
+
+
+async function captureAudio(
+  seconds,
+  manual
+){
+
+  const mime =
+    recorderMime();
+
+
+  const recorder =
+    new MediaRecorder(
+      state.stream,
+      mime
+        ? {mimeType:mime}
+        : undefined
+    );
+
+
+  const chunks = [];
+
+  let maxLevel = 0;
+
+  let levelTimer = null;
+
+
+  recorder.ondataavailable =
+    function(event){
+
+      if (
+        event.data &&
+        event.data.size
+      ){
+        chunks.push(
+          event.data
+        );
+      }
+    };
+
+
+  const startMs =
+    Date.now();
+
+
+  const stopped =
+    new Promise(
+      function(resolve, reject){
+
+        recorder.onerror =
+          function(event){
+
+            reject(
+              event.error ||
+              new Error(
+                'Recording failed.'
+              )
+            );
+          };
+
+
+        recorder.onstop =
+          function(){
+
+            clearInterval(
+              levelTimer
+            );
+
+
+            const blob =
+              new Blob(
+                chunks,
+                {
+                  type:
+                    recorder.mimeType ||
+                    mime ||
+                    'audio/webm'
+                }
+              );
+
+
+            resolve(
+              {
+                blob:blob,
+                maxLevel:maxLevel,
+                durationSec:
+                  (Date.now() - startMs) /
+                  1000
+              }
+            );
+          };
+      }
+    );
+
+
+  recorder.start(
+    250
+  );
+
+
+  levelTimer =
+    setInterval(
+      function(){
+
+        maxLevel =
+          Math.max(
+            maxLevel,
+            currentLevel()
+          );
+
+      },
+      75
+    );
+
+
+  if (manual){
+
+    state._manualRecorder =
+      recorder;
+
+  } else {
+
+    setTimeout(
+      function(){
+
+        if (
+          recorder.state !==
+          'inactive'
+        ){
+          recorder.stop();
+        }
+
+      },
+      seconds * 1000
+    );
+  }
+
+
+  return stopped;
+}
+
+
+function stopManual(){
+
+  if (
+    state._manualRecorder &&
+    state._manualRecorder.state !==
+    'inactive'
+  ){
+    state._manualRecorder.stop();
+  }
+}
+
+
+async function blobToBase64(blob){
+
+  const buffer =
+    await blob.arrayBuffer();
+
+
+  const bytes =
+    new Uint8Array(
+      buffer
+    );
+
+
+  let binary = '';
+
+  const chunkSize =
+    0x8000;
+
+
+  for (
+    let i = 0;
+    i < bytes.length;
+    i += chunkSize
+  ){
+
+    binary +=
+      String
+        .fromCharCode
+        .apply(
+          null,
+          bytes.subarray(
+            i,
+            Math.min(
+              i + chunkSize,
+              bytes.length
+            )
+          )
+        );
+  }
+
+
+  return btoa(binary);
+}
+
+
+async function uploadRecording(
+  exerciseId,
+  exerciseType,
+  recording,
+  meta,
+  attempt
+){
+
+  attempt =
+    attempt || 1;
+
+  meta =
+    meta || {};
+
+
+  const base64 =
+    await blobToBase64(
+      recording.blob
+    );
+
+
+  const result =
+    await api(
+      'upload',
+      {
+        submissionCode:
+          state.submissionCode,
+
+        exerciseId:
+          exerciseId,
+
+        exerciseType:
+          exerciseType,
+
+        expectedPitches:
+          meta.expectedPitches || '',
+
+        expectedMidi:
+          meta.expectedMidi || '',
+
+        solfege:
+          meta.solfege || '',
+
+        tonic:
+          meta.tonic || '',
+
+        tempoBpm:
+          meta.tempoBpm || '',
+
+        attempt:
+          attempt,
+
+        mimeType:
+          recording.blob.type ||
+          'audio/webm',
+
+        durationSec:
+          recording.durationSec
+            .toFixed(2),
+
+        maxLevel:
+          recording.maxLevel
+            .toFixed(4),
+
+        base64:
+          base64
+      }
+    );
+
+
+  state.samplesSaved++;
+
+
+  return result;
+}
+
+
+async function countdown(){
+
+  app().insertAdjacentHTML(
+    'beforeend',
+    '<div id="cd" class="countdown">3</div>'
+  );
+
+
+  const element =
+    document.getElementById(
+      'cd'
+    );
+
+
+  for (const number of [3,2,1]){
+
+    element.textContent =
+      number;
+
+    await sleep(
+      650
+    );
+  }
+
+
+  element.remove();
+}
+
+
+/********************************************************************
+ * SPEAKING SAMPLE
+ ********************************************************************/
+
+function showSpeech(){
+
+  setProgress(3);
+
+
+  app().innerHTML = `
+
+    <div class="card">
+
+      <div class="stepTitle">
+        Step 2 — Speaking
+      </div>
+
+      <h2>
+        Use your normal speaking voice.
+      </h2>
+
+      <p>
+        When the countdown ends,
+        count backward:
+      </p>
+
+      <p style="
+        font-size:28px;
+        font-weight:800;
+      ">
+        20, 19, 18, 17, 16, 15
+      </p>
+
+      <div class="btnrow">
+
+        <button
+          class="primary bigbtn"
+          onclick="recordSpeech()">
+
+          I’m ready
+
+        </button>
+
+      </div>
+
+      <div id="taskMsg"></div>
+
+    </div>
+  `;
+}
+
+
+async function recordSpeech(){
+
+  disableButtons();
+
+  await countdown();
+
+
+  const msg =
+    document.getElementById(
+      'taskMsg'
+    );
+
+
+  msg.innerHTML =
+
+    '<div class="recording">' +
+
+    '<span class="dot"></span>' +
+
+    'Recording… speak normally.' +
+
+    '</div>';
+
+
+  try{
+
+    const recording =
+      await captureAudio(
+        6,
+        false
+      );
+
+
+    msg.innerHTML =
+      '<div class="status warn">' +
+      'Saving securely…' +
+      '</div>';
+
+
+    await uploadRecording(
+      'SPEECH_20_TO_15',
+      'speech',
+      recording,
+      {}
+    );
+
+
+    msg.innerHTML =
+
+      '<div class="status ok">' +
+
+      'Recording captured ✓' +
+
+      '</div>' +
+
+      '<div class="btnrow">' +
+
+      '<button class="primary" onclick="showHappyBirthday()">' +
+
+      'Continue' +
+
+      '</button>' +
+
+      '</div>';
+
+  } catch(err){
+
+    msg.innerHTML =
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>';
+  }
+}
+
+
+/********************************************************************
+ * NATURAL SINGING SAMPLE
+ ********************************************************************/
+
+function showHappyBirthday(){
+
+  setProgress(4);
+
+
+  app().innerHTML = `
+
+    <div class="card">
+
+      <div class="stepTitle">
+        Step 3 — Natural singing
+      </div>
+
+      <h2>
+        Sing “Happy Birthday” wherever your voice
+        naturally wants to start.
+      </h2>
+
+      <p>
+        There is no starting note.
+        This helps us hear where your voice
+        naturally feels comfortable.
+      </p>
+
+      <p class="muted">
+        You will not hear the recording afterward.
+      </p>
+
+      <div class="btnrow">
+
+        <button
+          class="primary bigbtn"
+          onclick="recordHappy()">
+
+          Start recording
+
+        </button>
+
+        <button
+          class="secondary"
+          onclick="skipHappy()">
+
+          I’m not comfortable doing this one
+
+        </button>
+
+      </div>
+
+      <div id="taskMsg"></div>
+
+    </div>
+  `;
+}
+
+
+async function recordHappy(){
+
+  disableButtons();
+
+  await countdown();
+
+
+  const msg =
+    document.getElementById(
+      'taskMsg'
+    );
+
+
+  msg.innerHTML = `
+
+    <div class="recording">
+
+      <span class="dot"></span>
+
+      Recording…
+
+      <button
+        class="secondary"
+        onclick="stopManual()">
+
+        I’m finished
+
+      </button>
+
+    </div>
+  `;
+
+
+  try{
+
+    const recordingPromise =
+      captureAudio(
+        25,
+        true
+      );
+
+
+    setTimeout(
+      stopManual,
+      25000
+    );
+
+
+    const recording =
+      await recordingPromise;
+
+
+    msg.innerHTML =
+      '<div class="status warn">' +
+      'Saving securely…' +
+      '</div>';
+
+
+    await uploadRecording(
+      'HAPPY_BIRTHDAY',
+      'natural_song',
+      recording,
+      {}
+    );
+
+
+    msg.innerHTML =
+
+      '<div class="status ok">' +
+
+      'Recording captured ✓' +
+
+      '</div>' +
+
+      '<div class="btnrow">' +
+
+      '<button class="primary" onclick="beginPatterns()">' +
+
+      'Continue' +
+
+      '</button>' +
+
+      '</div>';
+
+  } catch(err){
+
+    msg.innerHTML =
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>';
+  }
+}
+
+
+function skipHappy(){
+
+  state.patternHistory.push(
+    {
+      exercise:'HAPPY_BIRTHDAY',
+      comfort:'Skipped'
+    }
+  );
+
+
+  beginPatterns();
+}
+
+
+/********************************************************************
+ * GENERATED REFERENCE SOUND
+ ********************************************************************/
+
+function midiToFreq(midi){
+
+  return (
+    440 *
+    Math.pow(
+      2,
+      (midi - 69) / 12
+    )
+  );
+}
+
+
+function nameForMidi(midi){
+
+  const names = [
+    'C',
+    'C#',
+    'D',
+    'Eb',
+    'E',
+    'F',
+    'F#',
+    'G',
+    'Ab',
+    'A',
+    'Bb',
+    'B'
+  ];
+
+
+  return (
+    names[
+      (midi % 12 + 12) % 12
+    ] +
+    (
+      Math.floor(midi / 12) - 1
+    )
+  );
+}
+
+
+/*
+ * Gentle synthesized reference tone.
+ * No human model voice is used.
+ */
+function softTone(
+  midi,
+  start,
+  duration
+){
+
+  const ctx =
+    state.audioCtx;
+
+
+  const master =
+    ctx.createGain();
+
+
+  master.gain
+    .setValueAtTime(
+      0.0001,
+      start
+    );
+
+
+  master.gain
+    .exponentialRampToValueAtTime(
+      0.22,
+      start + 0.025
+    );
+
+
+  master.gain
+    .exponentialRampToValueAtTime(
+      0.0001,
+      start + duration
+    );
+
+
+  master.connect(
+    ctx.destination
+  );
+
+
+  [
+    [1,1.00],
+    [2,0.18],
+    [3,0.06]
+  ].forEach(
+    function(pair){
+
+      const harmonic =
+        pair[0];
+
+      const level =
+        pair[1];
+
+
+      const osc =
+        ctx.createOscillator();
+
+
+      const gain =
+        ctx.createGain();
+
+
+      osc.type =
+        'sine';
+
+
+      osc.frequency
+        .setValueAtTime(
+          midiToFreq(midi) *
+          harmonic,
+          start
+        );
+
+
+      gain.gain.value =
+        level;
+
+
+      osc.connect(gain);
+
+      gain.connect(master);
+
+
+      osc.start(start);
+
+      osc.stop(
+        start +
+        duration +
+        0.03
+      );
+    }
+  );
+}
+
+
+async function playGenerated(
+  startMidi,
+  intervals,
+  solfege
+){
+
+  if (
+    state.audioCtx.state ===
+    'suspended'
+  ){
+    await state.audioCtx.resume();
+  }
+
+
+  drawContour(
+    intervals,
+    solfege,
+    -1
+  );
+
+
+  const beat =
+    60 / TEMPO;
+
+
+  const ctx =
+    state.audioCtx;
+
+
+  const startTime =
+    ctx.currentTime + 0.25;
+
+
+  let cursor = 0;
+
+
+  for (
+    let i = 0;
+    i < intervals.length;
+    i++
+  ){
+
+    const finalNote =
+      i === intervals.length - 1;
+
+
+    const duration =
+      (
+        finalNote
+          ? beat * 2
+          : beat
+      ) * 0.90;
+
+
+    softTone(
+      startMidi + intervals[i],
+      startTime + cursor,
+      duration
+    );
+
+
+    setTimeout(
+      function(){
+
+        drawContour(
+          intervals,
+          solfege,
+          i
+        );
+
+      },
+      (cursor + 0.15) * 1000
+    );
+
+
+    cursor +=
+      finalNote
+        ? beat * 2
+        : beat;
+  }
+
+
+  await sleep(
+    (cursor + 0.4) * 1000
+  );
+
+
+  drawContour(
+    intervals,
+    solfege,
+    -1
+  );
+}
+
+
+/********************************************************************
+ * SOLFEGE CONTOUR
+ *
+ * Vertical spacing represents semitones:
+ *
+ * Do -> Re = 2 semitones
+ * Re -> Mi = 2 semitones
+ * Mi -> Fa = 1 semitone
+ * Fa -> Sol = 2 semitones
+ *
+ * Therefore Mi -> Fa visibly has HALF the vertical spacing
+ * of the surrounding whole steps.
+ ********************************************************************/
+
+function drawContour(
+  intervals,
+  solfege,
+  active
+){
+
+  const holder =
+    document.getElementById(
+      'contour'
+    );
+
+
+  if (!holder){
+    return;
+  }
+
+
+  const width = 760;
+  const height = 330;
+
+  const left = 50;
+  const right = 50;
+
+  const bottom = 275;
+
+  /*
+   * 25 px per semitone:
+   * half step = 25 px
+   * whole step = 50 px
+   */
+  const semitonePx = 25;
+
+
+  const usableWidth =
+    width -
+    left -
+    right;
+
+
+  const xs =
+    intervals.map(
+      function(_, i){
+
+        return (
+          left +
+          i *
+          (
+            usableWidth /
+            (intervals.length - 1)
+          )
+        );
+      }
+    );
+
+
+  const ys =
+    intervals.map(
+      function(interval){
+
+        return (
+          bottom -
+          interval *
+          semitonePx
+        );
+      }
+    );
+
+
+  const points =
+    xs.map(
+      function(x, i){
+
+        return (
+          x +
+          ',' +
+          ys[i]
+        );
+      }
+    ).join(' ');
+
+
+  let svg =
+
+    '<svg ' +
+    'viewBox="0 0 ' +
+    width +
+    ' ' +
+    height +
+    '" ' +
+    'aria-label="Solfege pitch contour">' +
+
+    '<polyline ' +
+    'class="contourLine" ' +
+    'points="' +
+    points +
+    '">' +
+    '</polyline>';
+
+
+  xs.forEach(
+    function(x, i){
+
+      svg +=
+
+        '<circle ' +
+        'class="noteCircle ' +
+        (
+          i === active
+            ? 'active'
+            : ''
+        ) +
+        '" ' +
+        'cx="' +
+        x +
+        '" ' +
+        'cy="' +
+        ys[i] +
+        '" ' +
+        'r="25">' +
+        '</circle>' +
+
+        '<text ' +
+        'class="solfegeText" ' +
+        'x="' +
+        x +
+        '" ' +
+        'y="' +
+        ys[i] +
+        '">' +
+        solfege[i] +
+        '</text>';
+    }
+  );
+
+
+  svg +=
+    '</svg>';
+
+
+  holder.innerHTML =
+    svg;
+}
+
+
+/********************************************************************
+ * CONTROLLED 5-NOTE PATTERNS
+ ********************************************************************/
+
+let route = {
+  mode:'calibration',
+  direction:'',
+  queue:[]
+};
+
+
+function beginPatterns(){
+
+  setProgress(5);
+
+  state.patternHistory = [];
+
+
+  route = {
+    mode:'calibration',
+    direction:'',
+    queue:[]
+  };
+
+
+  showPattern(
+    'A3',
+    'Listen and echo'
+  );
+}
+
+
+function scaleMeta(startName){
+
+  const start =
+    NOTE_TO_MIDI[startName];
+
+
+  const midis =
+    SCALE_INTERVALS.map(
+      function(interval){
+
+        return start + interval;
+      }
+    );
+
+
+  return {
+    startName:startName,
+    startMidi:start,
+
+    expectedMidi:
+      midis.join(','),
+
+    expectedPitches:
+      midis
+        .map(nameForMidi)
+        .join(' '),
+
+    solfege:
+      SCALE_SOLFEGE.join('–'),
+
+    tonic:
+      startName,
+
+    tempoBpm:
+      TEMPO
+  };
+}
+
+
+function showPattern(
+  startName,
+  label,
+  attempt
+){
+
+  attempt =
+    attempt || 1;
+
+
+  const meta =
+    scaleMeta(
+      startName
+    );
+
+
+  state._currentPattern = {
+    startName:startName,
+    label:label,
+    attempt:attempt,
+    meta:meta
+  };
+
+
+  app().innerHTML = `
+
+    <div class="card">
+
+      <div class="stepTitle">
+        Step 4 — Listen and echo
+      </div>
+
+      <h2>
+        ${esc(label)}
+      </h2>
+
+      <p>
+        First listen.
+        The solfege is:
+      </p>
+
+      <p style="
+        font-size:21px;
+        font-weight:800;
+      ">
+        Do – Re – Mi – Fa – Sol – Fa – Mi – Re – Do
+      </p>
+
+      <p class="muted">
+        Notice that <b>Mi → Fa</b> is a smaller step.
+        The contour shows the actual high-and-low spacing.
+      </p>
+
+      <div
+        id="contour"
+        class="contourWrap">
+      </div>
+
+      <div class="btnrow">
+
+        <button
+          class="primary bigbtn"
+          onclick="listenCurrent()">
+
+          ▶ Listen
+
+        </button>
+
+      </div>
+
+      <div id="patternAction"></div>
+
+    </div>
+  `;
+
+
+  drawContour(
+    SCALE_INTERVALS,
+    SCALE_SOLFEGE,
+    -1
+  );
+}
+
+
+async function listenCurrent(){
+
+  disableButtons();
+
+
+  const pattern =
+    state._currentPattern;
+
+
+  await playGenerated(
+    pattern.meta.startMidi,
+    SCALE_INTERVALS,
+    SCALE_SOLFEGE
+  );
+
+
+  document
+    .getElementById(
+      'patternAction'
+    )
+    .innerHTML = `
+
+      <div class="status ok">
+        Now it’s your turn.
+      </div>
+
+      <p>
+        Sing the same contour back on
+        <b>“loo.”</b>
+      </p>
+
+      <div class="btnrow">
+
+        <button
+          class="good bigbtn"
+          onclick="recordCurrentPattern()">
+
+          I’m ready to sing
+
+        </button>
+
+        <button
+          class="secondary"
+          onclick="stopPatternAssessment()">
+
+          I want to stop
+
+        </button>
+
+      </div>
+    `;
+}
+
+
+async function recordCurrentPattern(){
+
+  disableButtons();
+
+  await countdown();
+
+
+  const area =
+    document.getElementById(
+      'patternAction'
+    );
+
+
+  area.innerHTML =
+
+    '<div class="recording">' +
+
+    '<span class="dot"></span>' +
+
+    'Recording your “loo” pattern…' +
+
+    '</div>';
+
+
+  const pattern =
+    state._currentPattern;
+
+
+  try{
+
+    const beat =
+      60 / TEMPO;
+
+
+    /*
+     * Eight regular beats plus
+     * two beats for the final Do,
+     * plus a short safety margin.
+     */
+    const recording =
+      await captureAudio(
+        (10 * beat) + 2,
+        false
+      );
+
+
+    const exerciseId =
+      'SCALE_' +
+      pattern.startName
+        .replace('b','FLAT')
+        .replace('#','SHARP');
+
+
+    area.innerHTML =
+      '<div class="status warn">' +
+      'Recording captured — saving securely…' +
+      '</div>';
+
+
+    await uploadRecording(
+      exerciseId,
+      'scale_echo',
+      recording,
+      pattern.meta,
+      pattern.attempt
+    );
+
+
+    area.innerHTML =
+      comfortButtons(
+        exerciseId,
+        pattern.attempt
+      );
+
+  } catch(err){
+
+    area.innerHTML =
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>';
+  }
+}
+
+
+function comfortButtons(
+  exerciseId,
+  attempt
+){
+
+  return `
+
+    <h3>
+      How did that feel?
+    </h3>
+
+    <div class="comforts">
+
+      <button
+        onclick="patternComfort('Easy','${exerciseId}',${attempt})">
+        Easy
+      </button>
+
+      <button
+        onclick="patternComfort('Okay','${exerciseId}',${attempt})">
+        Okay
+      </button>
+
+      <button
+        onclick="patternComfort('Too high','${exerciseId}',${attempt})">
+        Too high
+      </button>
+
+      <button
+        onclick="patternComfort('Too low','${exerciseId}',${attempt})">
+        Too low
+      </button>
+
+      ${
+        attempt === 1
+          ? `
+            <button
+              onclick="retryPattern('${exerciseId}',${attempt})">
+              Try this one once more
+            </button>
+          `
+          : ''
+      }
+
+      <button
+        class="stop"
+        onclick="patternComfort('Stop','${exerciseId}',${attempt})">
+        I want to stop
+      </button>
+
+    </div>
+  `;
+}
+
+
+async function retryPattern(
+  exerciseId,
+  attempt
+){
+
+  try{
+
+    await api(
+      'comfort',
+      {
+        submissionCode:
+          state.submissionCode,
+
+        exerciseId:
+          exerciseId,
+
+        attempt:
+          attempt,
+
+        comfort:
+          'Retry chosen'
+      }
+    );
+
+  } catch(err){
+  }
+
+
+  const pattern =
+    state._currentPattern;
+
+
+  showPattern(
+    pattern.startName,
+    pattern.label,
+    2
+  );
+}
+
+
+async function patternComfort(
+  comfort,
+  exerciseId,
+  attempt
+){
+
+  try{
+
+    await api(
+      'comfort',
+      {
+        submissionCode:
+          state.submissionCode,
+
+        exerciseId:
+          exerciseId,
+
+        attempt:
+          attempt,
+
+        comfort:
+          comfort
+      }
+    );
+
+  } catch(err){
+  }
+
+
+  const start =
+    state._currentPattern.startName;
+
+
+  state.patternHistory.push(
+    {
+      start:start,
+      comfort:comfort,
+      attempt:attempt
+    }
+  );
+
+
+  if (comfort === 'Stop'){
+
+    finishPatterns();
+    return;
+  }
+
+
+  nextPattern(
+    start,
+    comfort
+  );
+}
+
+
+function tested(startName){
+
+  return state.patternHistory
+    .some(
+      function(item){
+
+        return (
+          item.start ===
+          startName
+        );
+      }
+    );
+}
+
+
+/********************************************************************
+ * ADAPTIVE ROUTING
+ *
+ * IMPORTANT:
+ * Students do NOT sing every pitch pattern.
+ *
+ * Calibration:
+ *   A3-start pattern
+ *   then C4-start pattern unless A3 is already too high
+ *
+ * Lower/changing branch:
+ *   Explore downward only.
+ *
+ * Middle/changing branch:
+ *   A3 was usable but C4 was too high.
+ *   Explore downward; A3 already gives the upper-region evidence.
+ *
+ * Treble branch:
+ *   Check lower comfort, then explore upward.
+ ********************************************************************/
+
+function nextPattern(
+  start,
+  comfort
+){
+
+  /*
+   * FIRST CALIBRATION: A3
+   */
+  if (
+    route.mode === 'calibration' &&
+    start === 'A3'
+  ){
+
+    if (
+      comfort === 'Too high'
+    ){
+
+      route.mode =
+        'lower';
+
+      route.direction =
+        'down';
+
+      route.queue = [
+        'F3',
+        'D3',
+        'Bb2',
+        'A2',
+        'G2'
+      ];
+
+      advanceRouteQueue();
+      return;
+    }
+
+
+    /*
+     * Easy / Okay / Too low:
+     * use C4 as the second routing probe.
+     */
+    showPattern(
+      'C4',
+      'Listen and echo'
+    );
+
+    return;
+  }
+
+
+  /*
+   * SECOND CALIBRATION: C4
+   */
+  if (
+    route.mode === 'calibration' &&
+    start === 'C4'
+  ){
+
+    if (
+      comfort === 'Too high'
+    ){
+
+      route.mode =
+        'middle';
+
+      route.direction =
+        'down';
+
+      route.queue = [
+        'G3',
+        'F3',
+        'D3',
+        'Bb2'
+      ];
+
+      advanceRouteQueue();
+      return;
+    }
+
+
+    /*
+     * C4 was not too high.
+     * Explore as treble / upper-capable pathway.
+     */
+    route.mode =
+      'treble';
+
+    route.direction =
+      'down';
+
+    route.queue = [
+      'Bb3'
+    ];
+
+    advanceRouteQueue();
+    return;
+  }
+
+
+  /*
+   * LOWER OR MIDDLE DOWNWARD EXPLORATION
+   */
+  if (
+    route.mode === 'lower' ||
+    route.mode === 'middle'
+  ){
+
+    if (
+      route.direction === 'down'
+    ){
+
+      /*
+       * Once something is too low,
+       * we have found the lower comfort boundary.
+       */
+      if (
+        comfort === 'Too low'
+      ){
+
+        finishPatterns();
+        return;
+      }
+
+
+      /*
+       * If it is still okay/easy,
+       * or even still too high,
+       * continue downward.
+       */
+      advanceRouteQueue();
+      return;
+    }
+  }
+
+
+  /*
+   * TREBLE: LOWER CHECK
+   */
+  if (
+    route.mode === 'treble' &&
+    route.direction === 'down'
+  ){
+
+    /*
+     * One lower check is enough.
+     * Then explore upward.
+     */
+    beginTrebleUpwardExploration();
+    return;
+  }
+
+
+  /*
+   * TREBLE: UPWARD EXPLORATION
+   */
+  if (
+    route.mode === 'treble' &&
+    route.direction === 'up'
+  ){
+
+    if (
+      comfort === 'Too high'
+    ){
+
+      finishPatterns();
+      return;
+    }
+
+
+    advanceRouteQueue();
+    return;
+  }
+
+
+  finishPatterns();
+}
+
+
+function advanceRouteQueue(){
+
+  while (
+    route.queue.length
+  ){
+
+    const next =
+      route.queue.shift();
+
+
+    if (
+      !tested(next)
+    ){
+
+      showPattern(
+        next,
+        'Listen and echo'
+      );
+
+      return;
+    }
+  }
+
+
+  /*
+   * When lower/middle queues end,
+   * there is no reason to climb back through a
+   * boundary already established by calibration.
+   */
+  if (
+    route.mode === 'lower' ||
+    route.mode === 'middle'
+  ){
+
+    finishPatterns();
+    return;
+  }
+
+
+  if (
+    route.mode === 'treble' &&
+    route.direction === 'down'
+  ){
+
+    beginTrebleUpwardExploration();
+    return;
+  }
+
+
+  finishPatterns();
+}
+
+
+function beginTrebleUpwardExploration(){
+
+  route.direction =
+    'up';
+
+
+  route.queue = [
+    'D4',
+    'F4',
+    'A4',
+    'C5',
+    'D5'
+  ];
+
+
+  advanceRouteQueue();
+}
+
+
+function finishPatterns(){
+
+  showSustained();
+}
+
+
+function stopPatternAssessment(){
+
+  finishPatterns();
+}
+
+
+/********************************************************************
+ * COMFORTABLE SUSTAINED "OO"
+ ********************************************************************/
+
+function bestComfortableStart(){
+
+  const successes =
+    state.patternHistory
+
+      .filter(
+        function(item){
+
+          return (
+            item.comfort === 'Easy' ||
+            item.comfort === 'Okay'
+          );
+        }
+      )
+
+      .map(
+        function(item){
+
+          return NOTE_TO_MIDI[
+            item.start
+          ];
+        }
+      )
+
+      .filter(
+        function(value){
+
+          return Number.isFinite(
+            value
+          );
+        }
+      )
+
+      .sort(
+        function(a,b){
+
+          return a - b;
+        }
+      );
+
+
+  if (!successes.length){
+
+    return NOTE_TO_MIDI['C4'];
+  }
+
+
+  return successes[
+    Math.floor(
+      (successes.length - 1) /
+      2
+    )
+  ];
+}
+
+
+function showSustained(){
+
+  setProgress(6);
+
+
+  const comfortableTonic =
+    bestComfortableStart();
+
+
+  /*
+   * Use Mi of a successful five-note pattern.
+   * That keeps the sustained note away from
+   * both the bottom and top of that pattern.
+   */
+  state._sustainMidi =
+    comfortableTonic + 4;
+
+
+  app().innerHTML = `
+
+    <div class="card">
+
+      <div class="stepTitle">
+        Step 5 — Comfortable sustained sound
+      </div>
+
+      <h2>
+        One easy “oo”
+      </h2>
+
+      <p>
+        The app chose a pitch from the middle
+        of a pattern that felt comfortable.
+      </p>
+
+      <p>
+        For this exercise,
+        think of this single pitch as
+        <b>Do</b>.
+      </p>
+
+      <div class="btnrow">
+
+        <button
+          class="primary bigbtn"
+          onclick="listenSustain()">
+
+          ▶ Hear your Do
+
+        </button>
+
+      </div>
+
+      <div id="sustainAction"></div>
+
+    </div>
+  `;
+}
+
+
+async function listenSustain(){
+
+  await state.audioCtx.resume();
+
+
+  const ctx =
+    state.audioCtx;
+
+
+  const now =
+    ctx.currentTime + 0.15;
+
+
+  softTone(
+    state._sustainMidi,
+    now,
+    1.25
+  );
+
+
+  await sleep(
+    1550
+  );
+
+
+  document
+    .getElementById(
+      'sustainAction'
+    )
+    .innerHTML = `
+
+      <p>
+        Now hold <b>“oo”</b>
+        comfortably for about 4 seconds.
+        Do not push.
+      </p>
+
+      <div class="btnrow">
+
+        <button
+          class="good"
+          onclick="recordSustain()">
+
+          I’m ready
+
+        </button>
+
+        <button
+          class="secondary"
+          onclick="showLeap()">
+
+          Skip this one
+
+        </button>
+
+      </div>
+    `;
+}
+
+
+async function recordSustain(){
+
+  disableButtons();
+
+  await countdown();
+
+
+  const area =
+    document.getElementById(
+      'sustainAction'
+    );
+
+
+  area.innerHTML =
+
+    '<div class="recording">' +
+
+    '<span class="dot"></span>' +
+
+    'Hold “oo”…' +
+
+    '</div>';
+
+
+  try{
+
+    const recording =
+      await captureAudio(
+        5,
+        false
+      );
+
+
+    const pitchName =
+      nameForMidi(
+        state._sustainMidi
+      );
+
+
+    await uploadRecording(
+      'SUSTAIN_' +
+      pitchName.replace('#','SHARP'),
+      'sustained_vowel',
+      recording,
+      {
+        expectedPitches:
+          pitchName,
+
+        expectedMidi:
+          String(
+            state._sustainMidi
+          ),
+
+        solfege:
+          'Do',
+
+        tonic:
+          pitchName
+      }
+    );
+
+
+    area.innerHTML =
+
+      '<div class="status ok">' +
+
+      'Captured ✓' +
+
+      '</div>' +
+
+      '<div class="btnrow">' +
+
+      '<button class="primary" onclick="showLeap()">' +
+
+      'Continue' +
+
+      '</button>' +
+
+      '</div>';
+
+  } catch(err){
+
+    area.innerHTML =
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>';
+  }
+}
+
+
+/********************************************************************
+ * LEAP / INTERVAL CHECK
+ ********************************************************************/
+
+function showLeap(){
+
+  setProgress(7);
+
+
+  state._leapTonic =
+    bestComfortableStart();
+
+
+  app().innerHTML = `
+
+    <div class="card">
+
+      <div class="stepTitle">
+        Step 6 — One leap pattern
+      </div>
+
+      <h2>
+        Do – Mi – Sol – Mi – Do
+      </h2>
+
+      <p>
+        This checks a different kind of
+        pitch matching than the stepwise pattern.
+      </p>
+
+      <div
+        id="contour"
+        class="contourWrap">
+      </div>
+
+      <div class="btnrow">
+
+        <button
+          class="primary bigbtn"
+          onclick="listenLeap()">
+
+          ▶ Listen
+
+        </button>
+
+        <button
+          class="secondary"
+          onclick="showFinish()">
+
+          Skip this one
+
+        </button>
+
+      </div>
+
+      <div id="leapAction"></div>
+
+    </div>
+  `;
+
+
+  drawContour(
+    LEAP_INTERVALS,
+    LEAP_SOLFEGE,
+    -1
+  );
+}
+
+
+async function listenLeap(){
+
+  await playGenerated(
+    state._leapTonic,
+    LEAP_INTERVALS,
+    LEAP_SOLFEGE
+  );
+
+
+  document
+    .getElementById(
+      'leapAction'
+    )
+    .innerHTML = `
+
+      <p>
+        Your turn:
+        sing
+        <b>
+          Do – Mi – Sol – Mi – Do
+        </b>
+        on
+        <b>“loo.”</b>
+      </p>
+
+      <div class="btnrow">
+
+        <button
+          class="good"
+          onclick="recordLeap()">
+
+          I’m ready
+
+        </button>
+
+      </div>
+    `;
+}
+
+
+async function recordLeap(){
+
+  disableButtons();
+
+  await countdown();
+
+
+  const area =
+    document.getElementById(
+      'leapAction'
+    );
+
+
+  area.innerHTML =
+
+    '<div class="recording">' +
+
+    '<span class="dot"></span>' +
+
+    'Recording…' +
+
+    '</div>';
+
+
+  try{
+
+    const beat =
+      60 / TEMPO;
+
+
+    const recording =
+      await captureAudio(
+        (5 * beat) + 2,
+        false
+      );
+
+
+    const midis =
+      LEAP_INTERVALS.map(
+        function(interval){
+
+          return (
+            state._leapTonic +
+            interval
+          );
+        }
+      );
+
+
+    await uploadRecording(
+      'LEAP_' +
+      nameForMidi(
+        state._leapTonic
+      ).replace('#','SHARP'),
+
+      'leap_echo',
+
+      recording,
+
+      {
+        expectedPitches:
+          midis
+            .map(nameForMidi)
+            .join(' '),
+
+        expectedMidi:
+          midis.join(','),
+
+        solfege:
+          LEAP_SOLFEGE
+            .join('–'),
+
+        tonic:
+          nameForMidi(
+            state._leapTonic
+          ),
+
+        tempoBpm:
+          TEMPO
+      }
+    );
+
+
+    area.innerHTML =
+
+      '<div class="status ok">' +
+
+      'Captured ✓' +
+
+      '</div>' +
+
+      '<div class="btnrow">' +
+
+      '<button class="primary" onclick="showFinish()">' +
+
+      'Continue' +
+
+      '</button>' +
+
+      '</div>';
+
+  } catch(err){
+
+    area.innerHTML =
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>';
+  }
+}
+
+
+/********************************************************************
+ * FINAL COMFORT + SUBMISSION
+ ********************************************************************/
+
+function showFinish(){
+
+  setProgress(8);
+
+
+  app().innerHTML = `
+
+    <div class="card">
+
+      <div class="stepTitle">
+        Final step
+      </div>
+
+      <h2>
+        How did the whole voice check feel?
+      </h2>
+
+      <div class="comforts">
+
+        <button
+          onclick="finalize('Comfortable')">
+          Comfortable
+        </button>
+
+        <button
+          onclick="finalize('Mostly okay')">
+          Mostly okay
+        </button>
+
+        <button
+          onclick="finalize('Nervous but manageable')">
+          Nervous but manageable
+        </button>
+
+        <button
+          onclick="finalize('Uncomfortable')">
+          Uncomfortable
+        </button>
+
+      </div>
+
+      <div id="finishMsg"></div>
+
+    </div>
+  `;
+}
+
+
+async function finalize(
+  overallComfort
+){
+
+  disableButtons();
+
+
+  const msg =
+    document.getElementById(
+      'finishMsg'
+    );
+
+
+  msg.innerHTML =
+
+    '<div class="status warn">' +
+
+    'Finishing your private submission…' +
+
+    '</div>';
+
+
+  try{
+
+    await api(
+      'finalize',
+      {
+        submissionCode:
+          state.submissionCode,
+
+        overallComfort:
+          overallComfort,
+
+        patternSummary:
+          state.patternHistory
+      }
+    );
+
+
+    if (state.stream){
+
+      state.stream
+        .getTracks()
+        .forEach(
+          function(track){
+
+            track.stop();
+          }
+        );
+    }
+
+
+    cancelAnimationFrame(
+      state.meterRAF
+    );
+
+
+    app().innerHTML = `
+
+      <div class="card">
+
+        <h2>
+          You’re finished ✓
+        </h2>
+
+        <p>
+          Thank you.
+          Your recordings were captured privately.
+        </p>
+
+        <p>
+          <b>
+            You did not have to listen to your own recorded voice.
+          </b>
+        </p>
+
+        <p class="muted">
+          Your teacher will use the recordings
+          to find a comfortable chorus part.
+          This is not a grade or audition score.
+        </p>
+
+      </div>
+    `;
+
+  } catch(err){
+
+    msg.innerHTML =
+      '<div class="status bad">' +
+      esc(err.message) +
+      '</div>';
+  }
+}
+
+
+/********************************************************************
+ * START
+ ********************************************************************/
+
+showWelcome();
+
+</script>
+
+</body>
+</html>
