@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Galvin Chorus Voice Discovery</title>
+<title>Galvin Middle School Chorus — Voice Discovery</title>
 
 <style>
   :root{
@@ -323,6 +323,52 @@
     letter-spacing:.05em;
   }
 
+  .languageBar{
+    display:flex;
+    gap:9px;
+    align-items:center;
+    flex-wrap:wrap;
+    margin:10px 0 4px;
+  }
+
+  .languageBar label{
+    margin:0;
+    font-size:13px;
+  }
+
+  .languageBar select{
+    font:inherit;
+    padding:8px 10px;
+    border:1px solid #aeb8c5;
+    border-radius:9px;
+    background:#fff;
+  }
+
+  .langHelp{
+    background:#f8fafc;
+    border-left:4px solid var(--accent);
+    border-radius:8px;
+    padding:11px 13px;
+    margin:14px 0;
+    line-height:1.5;
+  }
+
+  .langHelp button{
+    margin-top:8px;
+    padding:8px 10px;
+    font-size:13px;
+  }
+
+  details.vocab{
+    margin-top:14px;
+  }
+
+  details.vocab summary{
+    cursor:pointer;
+    font-weight:800;
+    color:var(--accent);
+  }
+
   @media(max-width:560px){
     h1{font-size:26px}
     .comforts{grid-template-columns:1fr}
@@ -337,12 +383,23 @@
 <div class="wrap">
 
   <div class="brand">
-    Galvin Chorus
+    Galvin Middle School (Wakefield, MA) Chorus
   </div>
 
   <h1>
     Voice Discovery
   </h1>
+
+  <div class="languageBar">
+    <label for="globalLanguage">Language support:</label>
+    <select id="globalLanguage" onchange="changeLanguage(this.value)">
+      <option value="en">English</option>
+      <option value="es">Español</option>
+      <option value="pt">Português</option>
+      <option value="ht">Kreyòl ayisyen</option>
+      <option value="ar">العربية</option>
+    </select>
+  </div>
 
   <div class="progress">
     <div id="progressBar"></div>
@@ -417,10 +474,154 @@ const NOTE_TO_MIDI = {
 
 
 /********************************************************************
+ * LANGUAGE SUPPORT
+ *
+ * Core student directions remain in plain English. Students may also
+ * choose a translated support card for each step. The translated card
+ * never changes the musical task or any saved assessment data.
+ ********************************************************************/
+
+const LANGUAGE_LABELS = {
+  en:'English',
+  es:'Español',
+  pt:'Português',
+  ht:'Kreyòl ayisyen',
+  ar:'العربية'
+};
+
+const LANGUAGE_LOCALES = {
+  en:'en-US',
+  es:'es-US',
+  pt:'pt-BR',
+  ht:'ht-HT',
+  ar:'ar'
+};
+
+const LANGUAGE_HELP = {
+  es:{
+    welcome:'Esto no es una audición. Completar Voice Discovery puede contar como una tarea, pero no se califican tu voz, tu registro ni tu habilidad para cantar. Canta de manera cómoda y haz tu mejor esfuerzo.',
+    login:'Escribe el número de tu correo escolar y tu apellido. Luego selecciona “Let’s begin”.',
+    grade:'Selecciona el grado de coro en el que estás actualmente.',
+    mic:'Permite el acceso al micrófono y di “hello” con tu voz normal para comprobarlo.',
+    speech:'Usa tu voz normal al hablar. Después de la cuenta regresiva, di: 20, 19, 18, 17, 16, 15.',
+    happy:'Canta “Happy birthday dear [NAME]” con una voz cómoda. Empieza en cualquier nota que se sienta natural. Tú decides cuándo detener la grabación.',
+    pattern:'Escucha el patrón dos veces. Luego cántalo de vuelta usando “loo”. No tiene que ser perfecto.',
+    comfort:'Elige cómo se sintió: Easy, Okay, Too high o Too low. No hay una respuesta incorrecta.',
+    noComfort:'Gracias. Ya tenemos suficiente información. No necesitas forzar tu voz más alto ni más bajo.',
+    sustain:'Escucha una nota. Luego mantén “loo” cómodamente durante unos 4 segundos.',
+    leap:'Escucha dos veces. Luego canta el patrón de vuelta usando “loo”.',
+    finish:'¡Terminaste! Tu voz no fue calificada. El Sr. Zini usará esta información para ayudarte a encontrar la parte en la que puedas contribuir y tener más éxito en cada canción. Tu parte puede cambiar de una canción a otra.',
+    direct:'Abre Voice Discovery desde el enlace escolar en Google Classroom mientras estás conectado a tu cuenta @wpsstudent.org.'
+  },
+  pt:{
+    welcome:'Isto não é uma audição. Concluir o Voice Discovery pode contar como uma tarefa, mas sua voz, sua extensão vocal e sua habilidade de cantar não serão avaliadas. Cante com conforto e faça o seu melhor.',
+    login:'Digite o número do seu e-mail escolar e seu sobrenome. Depois selecione “Let’s begin”.',
+    grade:'Selecione a série do coro em que você está atualmente.',
+    mic:'Permita o acesso ao microfone e diga “hello” com sua voz normal para testar.',
+    speech:'Use sua voz normal de fala. Depois da contagem regressiva, diga: 20, 19, 18, 17, 16, 15.',
+    happy:'Cante “Happy birthday dear [NAME]” com uma voz confortável. Comece em qualquer nota que pareça natural. Você decide quando parar a gravação.',
+    pattern:'Ouça o padrão duas vezes. Depois cante de volta usando “loo”. Não precisa ser perfeito.',
+    comfort:'Escolha como se sentiu: Easy, Okay, Too high ou Too low. Não há resposta errada.',
+    noComfort:'Obrigado. Já temos informação suficiente. Você não precisa forçar sua voz mais aguda ou mais grave.',
+    sustain:'Ouça uma nota. Depois sustente “loo” confortavelmente por cerca de 4 segundos.',
+    leap:'Ouça duas vezes. Depois cante o padrão de volta usando “loo”.',
+    finish:'Você terminou! Sua voz não foi avaliada. O Sr. Zini usará estas informações para ajudar a encontrar a parte em que você pode contribuir e ter mais sucesso em cada música. Sua parte pode mudar de uma música para outra.',
+    direct:'Abra o Voice Discovery pelo link da escola no Google Classroom enquanto estiver conectado à sua conta @wpsstudent.org.'
+  },
+  ht:{
+    welcome:'Sa a se pa yon odisyon. Fini Voice Discovery ka konte kòm yon devwa, men yo pa bay nòt pou vwa ou, etandi vwa ou, oswa kapasite ou pou chante. Chante alèz epi fè sa ou kapab.',
+    login:'Antre nimewo imèl lekòl ou ak siyati ou. Apre sa, chwazi “Let’s begin”.',
+    grade:'Chwazi klas koral ou ye ladan kounye a.',
+    mic:'Pèmèt mikwofòn nan epi di “hello” ak vwa nòmal ou pou teste li.',
+    speech:'Sèvi ak vwa nòmal ou lè w ap pale. Apre dekont lan, di: 20, 19, 18, 17, 16, 15.',
+    happy:'Chante “Happy birthday dear [NAME]” ak yon vwa ki konfòtab. Kòmanse sou nenpòt nòt ki santi l natirèl. Se ou ki deside lè pou sispann anrejistreman an.',
+    pattern:'Koute modèl la de fwa. Apre sa, chante li tounen sou “loo”. Li pa bezwen pafè.',
+    comfort:'Chwazi kijan li te santi: Easy, Okay, Too high, oswa Too low. Pa gen move repons.',
+    noComfort:'Mèsi. Nou gen ase enfòmasyon. Ou pa bezwen fòse vwa ou pi wo oswa pi ba.',
+    sustain:'Koute yon nòt. Apre sa, kenbe “loo” alèz pandan anviwon 4 segonn.',
+    leap:'Koute de fwa. Apre sa, chante modèl la tounen sou “loo”.',
+    finish:'Ou fini! Yo pa t bay nòt pou vwa ou. Mesye Zini ap sèvi ak enfòmasyon sa yo pou ede jwenn pati kote ou ka kontribye epi reyisi plis nan chak chante. Pati ou ka chanje selon chante a.',
+    direct:'Louvri Voice Discovery soti nan lyen lekòl la nan Google Classroom pandan ou konekte ak kont @wpsstudent.org ou.'
+  },
+  ar:{
+    welcome:'هذا ليس اختبار أداء. قد يُحتسب إكمال Voice Discovery كواجب، لكن صوتك ومداه وقدرتك على الغناء لا تُعطى عليها درجات. غنِّ براحة وابذل أفضل ما لديك.',
+    login:'اكتب رقم بريدك المدرسي واسم عائلتك، ثم اختر “Let’s begin”.',
+    grade:'اختر صف الكورال الذي تدرس فيه حاليًا.',
+    mic:'اسمح باستخدام الميكروفون وقل “hello” بصوتك العادي للتأكد من أنه يعمل.',
+    speech:'استخدم صوتك العادي في الكلام. بعد العد التنازلي قل: 20، 19، 18، 17، 16، 15.',
+    happy:'غنِّ “Happy birthday dear [NAME]” بصوت مريح. ابدأ من أي نغمة تبدو طبيعية لك. أنت تقرر متى توقف التسجيل.',
+    pattern:'استمع إلى النمط مرتين، ثم غنّه مرة أخرى على مقطع “loo”. لا يجب أن يكون مثاليًا.',
+    comfort:'اختر كيف شعرت: Easy أو Okay أو Too high أو Too low. لا توجد إجابة خاطئة.',
+    noComfort:'شكرًا. لدينا معلومات كافية. لا تحتاج إلى دفع صوتك إلى أعلى أو أسفل.',
+    sustain:'استمع إلى نغمة واحدة، ثم حافظ على “loo” براحة لمدة نحو 4 ثوانٍ.',
+    leap:'استمع مرتين، ثم غنِّ النمط مرة أخرى على “loo”.',
+    finish:'لقد انتهيت! لم يتم تقييم صوتك بدرجة. سيستخدم الأستاذ زيني هذه المعلومات لمساعدتك في العثور على الجزء الذي يمكنك أن تساهم فيه وتنجح أكثر في كل أغنية. قد يتغير الجزء الذي تغنيه من أغنية إلى أخرى.',
+    direct:'افتح Voice Discovery من رابط المدرسة في Google Classroom أثناء تسجيل الدخول بحسابك @wpsstudent.org.'
+  }
+};
+
+function initialLanguage(){
+  const query = new URLSearchParams(window.location.search).get('lang');
+  if (LANGUAGE_LABELS[query]) return query;
+  try{
+    const saved = localStorage.getItem('galvinVdLanguage');
+    if (LANGUAGE_LABELS[saved]) return saved;
+  } catch(e){}
+  return 'en';
+}
+
+function changeLanguage(lang){
+  if (!LANGUAGE_LABELS[lang]) lang = 'en';
+  state.lang = lang;
+  try{ localStorage.setItem('galvinVdLanguage', lang); } catch(e){}
+  const select = document.getElementById('globalLanguage');
+  if (select) select.value = lang;
+  if (typeof state.currentScreen === 'function') state.currentScreen();
+}
+
+function languageHelp(key, replacements){
+  const lang = state && state.lang ? state.lang : 'en';
+  if (lang === 'en' || !LANGUAGE_HELP[lang] || !LANGUAGE_HELP[lang][key]) return '';
+  let text = LANGUAGE_HELP[lang][key];
+  replacements = replacements || {};
+  Object.keys(replacements).forEach(function(token){
+    text = text.split('[' + token + ']').join(replacements[token]);
+  });
+  const dir = lang === 'ar' ? 'rtl' : 'ltr';
+  return '<div class="langHelp" dir="' + dir + '">' +
+    '<b>' + esc(LANGUAGE_LABELS[lang]) + ':</b> ' + esc(text) +
+    '<br><button class="secondary" type="button" onclick="speakLanguageHelp(' + JSON.stringify(key) + ',' + JSON.stringify(replacements) + ')">🔊 Hear this direction</button>' +
+    '</div>';
+}
+
+function speakLanguageHelp(key, replacements){
+  const lang = state.lang || 'en';
+  if (lang === 'en' || !LANGUAGE_HELP[lang] || !LANGUAGE_HELP[lang][key]) return;
+  let text = LANGUAGE_HELP[lang][key];
+  replacements = replacements || {};
+  Object.keys(replacements).forEach(function(token){
+    text = text.split('[' + token + ']').join(replacements[token]);
+  });
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = LANGUAGE_LOCALES[lang] || lang;
+  window.speechSynthesis.speak(utterance);
+}
+
+function setCurrentScreen(fn){
+  state.currentScreen = fn;
+  const select = document.getElementById('globalLanguage');
+  if (select) select.value = state.lang || 'en';
+}
+
+/********************************************************************
  * STATE
  ********************************************************************/
 
 let state = {
+  lang:initialLanguage(),
+  currentScreen:null,
   studentId:'',
   lastName:'',
   enrollment:null,
@@ -612,6 +813,7 @@ function api(action, payload){
 
 function showWelcome(){
 
+  setCurrentScreen(showWelcome);
   setProgress(1);
 
   app().innerHTML = `
@@ -623,26 +825,41 @@ function showWelcome(){
       </h2>
 
       <p>
-        This is <b>not an audition or a grade</b>.
-        It is a short way for Mr. Zini to learn where your singing voice feels most comfortable right now.
+        This is <b>not an audition</b>.
+        Completing Voice Discovery may count as a chorus assignment, but
+        <b>your voice, range, tone, or singing ability is not graded</b>.
       </p>
 
       <p>
-        Singing voices can change a lot during grades 5–8.
-        The notes that feel easy, the sound of your voice, and the best place for you to sing can all shift as you grow.
-        For many singers, range becomes more consistent later in the teen years, and voices continue developing beyond middle school.
+        Singing voices can change dramatically during grades 5–8.
+        Range, tone, registers, and the notes that feel most comfortable can shift as you grow.
+        For many singers, the voice becomes more consistent later in the teen years, and voices continue developing into adulthood.
+      </p>
+
+      <p>
+        Mr. Zini will use Voice Discovery to help choose the part where you can
+        <b>contribute and succeed most in each song</b>.
+        Your part may change from song to song — that is completely normal.
       </p>
 
       <p class="cheer">
-        There are no good or bad results. Sing comfortably and do your best.
+        There are no good or bad voice results. Sing comfortably and do your best.
       </p>
 
-      <div class="termGrid" aria-label="Voice words to know">
-        <div class="term"><b>Range</b><br><span class="small">The notes your voice can sing from low to high.</span></div>
-        <div class="term"><b>Tessitura</b><br><span class="small">The part of your range where your voice feels most comfortable.</span></div>
-        <div class="term"><b>Tone</b><br><span class="small">The unique quality or color of your voice.</span></div>
-        <div class="term"><b>Voice part</b><br><span class="small">The musical line you sing in a song. Your part may change from song to song.</span></div>
-      </div>
+      ${languageHelp('welcome')}
+
+      <details class="vocab">
+        <summary>Voice words you’ll hear</summary>
+        <div class="termGrid" aria-label="Voice words to know">
+          <div class="term"><b>Pitch</b><br><span class="small">How high or low a note sounds.</span></div>
+          <div class="term"><b>Range</b><br><span class="small">All the notes your voice can sing, from your lowest to your highest.</span></div>
+          <div class="term"><b>Comfortable range</b><br><span class="small">Notes you can sing without pushing, straining, or feeling uncomfortable.</span></div>
+          <div class="term"><b>Tessitura</b><br><span class="small">The part of your range where your voice feels best and can sing comfortably for longer.</span></div>
+          <div class="term"><b>Tone</b><br><span class="small">The quality or “color” of your sound. Different tones are not better or worse.</span></div>
+          <div class="term"><b>Register</b><br><span class="small">An area of your voice that may feel or sound different as you sing higher or lower.</span></div>
+          <div class="term"><b>Voice part</b><br><span class="small">The musical line you sing in a particular song. Your part may change from song to song.</span></div>
+        </div>
+      </details>
 
       <p class="small" style="margin-top:14px;">
         Never push or strain your voice. If singing hurts, stop and tell Mr. Zini.
@@ -652,6 +869,8 @@ function showWelcome(){
 
 
     <div class="card">
+
+      ${languageHelp('login')}
 
       <label>
         School email
@@ -772,6 +991,8 @@ async function lookup(){
 
 function showEnrollmentChoices(matches){
 
+  setCurrentScreen(function(){ showEnrollmentChoices(matches); });
+
   const buttons =
     matches
       .map(
@@ -818,6 +1039,8 @@ function showEnrollmentChoices(matches){
       <p class="muted">
         Choose your current chorus grade.
       </p>
+
+      ${languageHelp('grade')}
 
       ${buttons}
 
@@ -908,6 +1131,8 @@ async function chooseEnrollment(match){
 
 function showMicSetup(firstName){
 
+  setCurrentScreen(function(){ showMicSetup(firstName); });
+
   setProgress(2);
 
   app().innerHTML = `
@@ -921,6 +1146,8 @@ function showMicSetup(firstName){
       <h2>
         Hi ${esc(firstName)}! Let’s get set up.
       </h2>
+
+      ${languageHelp('mic')}
 
       <p>
         First, we’ll make sure your microphone is working.
@@ -1624,6 +1851,8 @@ async function countdown(){
 
 function showSpeech(){
 
+  setCurrentScreen(showSpeech);
+
   setProgress(3);
 
 
@@ -1638,6 +1867,8 @@ function showSpeech(){
       <h2>
         Easy first one!
       </h2>
+
+      ${languageHelp('speech')}
 
       <p>
         Use your <b>normal speaking voice</b>.
@@ -1751,6 +1982,8 @@ async function recordSpeech(){
 
 function showHappyBirthday(){
 
+  setCurrentScreen(showHappyBirthday);
+
   setProgress(4);
 
   const firstName =
@@ -1767,6 +2000,8 @@ function showHappyBirthday(){
       <h2>
         Now let’s hear your natural singing voice.
       </h2>
+
+      ${languageHelp('happy',{NAME:firstName})}
 
       <p>
         Sing just:
@@ -2350,6 +2585,8 @@ function showPattern(
   attempt
 ){
 
+  setCurrentScreen(function(){ showPattern(startName, label, attempt); });
+
   attempt =
     attempt || 1;
 
@@ -2381,6 +2618,8 @@ function showPattern(
       <h2>
         Listen twice, then sing it back.
       </h2>
+
+      ${languageHelp('pattern')}
 
       <p>
         You’ll hear a short pattern <b>two times</b>.
@@ -2573,6 +2812,8 @@ function comfortButtons(
     <h3>
       Nice! How did that feel?
     </h3>
+
+    ${languageHelp('comfort')}
 
     <div class="comforts">
 
@@ -3011,12 +3252,16 @@ function finishPatterns(){
 
 
 function showNoComfortablePattern_(){
+
+  setCurrentScreen(showNoComfortablePattern_);
   setProgress(6);
 
   app().innerHTML = `
     <div class="card">
       <div class="stepTitle">Voice Discovery</div>
       <h2>That was helpful — thank you!</h2>
+
+      ${languageHelp('noComfort')}
       <p>
         We have enough information from those patterns, so you do not need to push your voice any higher or lower.
       </p>
@@ -3088,6 +3333,8 @@ function bestComfortableStart(){
 
 function showSustained(){
 
+  setCurrentScreen(showSustained);
+
   setProgress(6);
 
 
@@ -3116,6 +3363,8 @@ function showSustained(){
       <h2>
         Nice work — almost there!
       </h2>
+
+      ${languageHelp('sustain')}
 
       <p>
         You’ll hear <b>one comfortable pitch</b>.
@@ -3291,6 +3540,8 @@ async function recordSustain(){
 
 function showLeap(){
 
+  setCurrentScreen(showLeap);
+
   setProgress(7);
 
 
@@ -3314,6 +3565,8 @@ function showLeap(){
       <h2>
         One last singing pattern!
       </h2>
+
+      ${languageHelp('leap')}
 
       <p>
         You’ll hear a short pattern with a few bigger jumps.
@@ -3516,6 +3769,8 @@ async function recordLeap(){
 
 function showFinish(){
 
+  setCurrentScreen(showFinish);
+
   setProgress(8);
 
 
@@ -3530,6 +3785,8 @@ function showFinish(){
       <h2>
         You did it! One quick question:
       </h2>
+
+      ${languageHelp('finish')}
 
       <p>
         How did Voice Discovery feel overall?
@@ -3640,7 +3897,7 @@ async function finalize(
         </p>
 
         <p>
-          Mr. Zini will use your recordings to help choose the chorus part that fits you best in each song — where your voice feels comfortable and you can contribute and succeed.
+          Mr. Zini will use your recordings to help choose the chorus part for each song where your voice can feel comfortable, contribute, and succeed the most.
         </p>
 
         <p>
@@ -3648,7 +3905,7 @@ async function finalize(
         </p>
 
         <p class="muted">
-          This was not a grade or an audition. You’re finished — nice work!
+          Completing Voice Discovery may count as an assignment, but your voice itself was not graded or scored. You’re finished — nice work!
         </p>
 
       </div>
@@ -3668,13 +3925,18 @@ async function finalize(
  * START
  ********************************************************************/
 
+const initialSelect = document.getElementById('globalLanguage');
+if (initialSelect) initialSelect.value = state.lang;
+
 if (!window.opener || window.opener.closed){
+  setCurrentScreen(function(){ window.location.reload(); });
   setProgress(1);
   app().innerHTML = `
     <div class="card">
       <h2>Open Voice Discovery from Google Classroom</h2>
+      ${languageHelp('direct')}
       <p>
-        Start with the Galvin Voice Discovery school link while signed in to your <b>@wpsstudent.org</b> account.
+        Start with the Galvin Middle School Chorus Voice Discovery link while signed in to your <b>@wpsstudent.org</b> account.
       </p>
       <p class="muted">
         Keep the first school tab open while you complete Voice Discovery.
