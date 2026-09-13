@@ -404,6 +404,7 @@ let state = {
   lastName:'',
   enrollment:null,
   submissionCode:'',
+  firstName:'',
 
   stream:null,
   audioCtx:null,
@@ -411,7 +412,8 @@ let state = {
   meterRAF:null,
 
   patternHistory:[],
-  samplesSaved:0
+  samplesSaved:0,
+  noComfortablePattern:false
 };
 
 let pending = {};
@@ -826,9 +828,12 @@ async function chooseEnrollment(match){
     state.submissionCode =
       res.submissionCode;
 
+    state.firstName =
+      res.firstName || 'Singer';
+
 
     showMicSetup(
-      res.firstName
+      state.firstName
     );
 
   } catch(err){
@@ -876,8 +881,18 @@ function showMicSetup(firstName){
       </h2>
 
       <p>
-        Click <b>Enable microphone</b>.
-        When Chrome asks, choose <b>Allow</b>.
+        Before you begin:
+      </p>
+
+      <ul style="line-height:1.6; padding-left:24px;">
+        <li><b>Make sure your microphone is not muted.</b> Some devices have a microphone-mute key or switch.</li>
+        <li><b>Turn your device volume up enough to hear the examples clearly.</b> If you are using headphones, use a comfortable volume — not maximum.</li>
+        <li>Use a quiet room or quiet space if you can.</li>
+      </ul>
+
+      <p>
+        Then click <b>Enable microphone</b>.
+        If your browser asks for permission, choose <b>Allow</b>.
       </p>
 
       <p class="muted">
@@ -971,7 +986,7 @@ async function enableMic(){
       </div>
 
       <p>
-        Click <b>Test microphone</b>, then say “hello” normally while you watch the meter.
+        Click <b>Test microphone</b>, then say “hello” normally while you watch the meter. If the meter does not move, check that your microphone is not muted.
       </p>
 
       <div class="meter">
@@ -1187,6 +1202,8 @@ function recorderMime(){
   const options = [
     'audio/webm;codecs=opus',
     'audio/webm',
+    'audio/mp4;codecs=mp4a.40.2',
+    'audio/mp4',
     'audio/ogg;codecs=opus'
   ];
 
@@ -1680,6 +1697,8 @@ function showHappyBirthday(){
 
   setProgress(4);
 
+  const firstName =
+    state.firstName || 'your first name';
 
   app().innerHTML = `
 
@@ -1690,17 +1709,24 @@ function showHappyBirthday(){
       </div>
 
       <h2>
-        Sing “Happy Birthday” wherever your voice
-        naturally wants to start.
+        Sing one short phrase in your natural singing voice.
       </h2>
 
       <p>
-        There is no starting note.
-        This helps us hear where your voice
-        naturally feels comfortable.
+        Sing only:
+      </p>
+
+      <p style="font-size:26px; font-weight:800;">
+        “Happy birthday dear ${esc(firstName)}”
+      </p>
+
+      <p>
+        Start wherever your voice naturally wants to start.
+        There is no starting note to match.
       </p>
 
       <p class="muted">
+        Sing comfortably — do not push higher or lower than your voice wants to go.
         You will not hear the recording afterward.
       </p>
 
@@ -1710,15 +1736,7 @@ function showHappyBirthday(){
           class="primary bigbtn"
           onclick="recordHappy()">
 
-          Start recording
-
-        </button>
-
-        <button
-          class="secondary"
-          onclick="skipHappy()">
-
-          I’m not comfortable doing this one
+          I’m ready
 
         </button>
 
@@ -1737,82 +1755,47 @@ async function recordHappy(){
 
   await countdown();
 
-
   const msg =
     document.getElementById(
       'taskMsg'
     );
 
-
-  msg.innerHTML = `
-
-    <div class="recording">
-
-      <span class="dot"></span>
-
-      Recording…
-
-      <button
-        class="secondary"
-        onclick="stopManual()">
-
-        I’m finished
-
-      </button>
-
-    </div>
-  `;
-
+  msg.innerHTML =
+    '<div class="recording">' +
+    '<span class="dot"></span>' +
+    'Recording… sing “Happy birthday dear ' +
+    esc(state.firstName || 'your name') +
+    '.”' +
+    '</div>';
 
   try{
 
-    const recordingPromise =
-      captureAudio(
-        25,
-        true
-      );
-
-
-    setTimeout(
-      stopManual,
-      25000
-    );
-
-
     const recording =
-      await recordingPromise;
-
+      await captureAudio(
+        7,
+        false
+      );
 
     msg.innerHTML =
       '<div class="status warn">' +
       'Saving securely…' +
       '</div>';
 
-
     await uploadRecording(
-      'HAPPY_BIRTHDAY',
-      'natural_song',
+      'HAPPY_BIRTHDAY_DEAR_NAME',
+      'natural_song_phrase',
       recording,
       {}
     );
 
-
     msg.innerHTML =
-
       '<div class="status ok">' +
-
       'Recording captured ✓' +
-
       '</div>' +
-
       '<div class="btnrow">' +
-
       '<button class="primary" onclick="beginPatterns()">' +
-
       'Continue' +
-
       '</button>' +
-
       '</div>';
 
   } catch(err){
@@ -1822,20 +1805,6 @@ async function recordHappy(){
       esc(err.message) +
       '</div>';
   }
-}
-
-
-function skipHappy(){
-
-  state.patternHistory.push(
-    {
-      exercise:'HAPPY_BIRTHDAY',
-      comfort:'Skipped'
-    }
-  );
-
-
-  beginPatterns();
 }
 
 
@@ -2240,10 +2209,16 @@ function drawContour(
  * CONTROLLED 5-NOTE PATTERNS
  ********************************************************************/
 
+const MAX_SCALE_PATTERNS = 7;
+
+const LOWER_SEQUENCE = ['G3','F3','D3','Bb2','A2','G2'];
+const UPPER_SEQUENCE = ['G3','A3','Bb3','C4','D4','F4','G4','A4','Bb4','C5','D5'];
+
 let route = {
-  mode:'calibration',
-  direction:'',
-  queue:[]
+  phase:'start',
+  queue:[],
+  lastTooHighStart:'',
+  lastTooLowStart:''
 };
 
 
@@ -2254,15 +2229,18 @@ function beginPatterns(){
   state.patternHistory = [];
 
 
+  state.noComfortablePattern = false;
+
   route = {
-    mode:'calibration',
-    direction:'',
-    queue:[]
+    phase:'start',
+    queue:[],
+    lastTooHighStart:'',
+    lastTooLowStart:''
   };
 
 
   showPattern(
-    'A3',
+    'G3',
     'Listen and echo'
   );
 }
@@ -2432,15 +2410,12 @@ async function listenCurrent(){
 
         </button>
 
-        <button
-          class="secondary"
-          onclick="stopPatternAssessment()">
-
-          I want to stop
-
-        </button>
-
       </div>
+
+      <p class="small">
+        If a pattern feels too high or too low, that is useful information.
+        Tell us afterward and the next pattern will adjust.
+      </p>
     `;
 }
 
@@ -2567,17 +2542,11 @@ function comfortButtons(
           ? `
             <button
               onclick="retryPattern('${exerciseId}',${attempt})">
-              Try this one once more
+              Hear it and try this pattern one more time
             </button>
           `
           : ''
       }
-
-      <button
-        class="stop"
-        onclick="patternComfort('Stop','${exerciseId}',${attempt})">
-        I want to stop
-      </button>
 
     </div>
   `;
@@ -2666,13 +2635,6 @@ async function patternComfort(
   );
 
 
-  if (comfort === 'Stop'){
-
-    finishPatterns();
-    return;
-  }
-
-
   nextPattern(
     start,
     comfort
@@ -2696,284 +2658,292 @@ function tested(startName){
 
 
 /********************************************************************
- * ADAPTIVE ROUTING
+ * ADAPTIVE ROUTING — vNEXT
  *
- * IMPORTANT:
- * Students do NOT sing every pitch pattern.
- *
- * Calibration:
- *   A3-start pattern
- *   then C4-start pattern unless A3 is already too high
- *
- * Lower/changing branch:
- *   Explore downward only.
- *
- * Middle/changing branch:
- *   A3 was usable but C4 was too high.
- *   Explore downward; A3 already gives the upper-region evidence.
- *
- * Treble branch:
- *   Check lower comfort, then explore upward.
+ * Goals:
+ * - Start in a safer middle/lower neighborhood at G3 -> D4.
+ * - Never let a difficult pattern end the assessment.
+ * - Student reports Easy / Okay / Too high / Too low.
+ * - Find at least one comfortable five-note window when possible.
+ * - Stop after a useful neighborhood/boundary picture, max 7 patterns.
  ********************************************************************/
+
+function uniquePatternCount(){
+  const seen = {};
+
+  state.patternHistory.forEach(function(item){
+    if (item.start){
+      seen[item.start] = true;
+    }
+  });
+
+  return Object.keys(seen).length;
+}
+
+
+function comfortablePatternCount(){
+  return state.patternHistory.filter(function(item){
+    return item.comfort === 'Easy' || item.comfort === 'Okay';
+  }).length;
+}
+
 
 function nextPattern(
   start,
   comfort
 ){
 
-  /*
-   * FIRST CALIBRATION: A3
-   */
-  if (
-    route.mode === 'calibration' &&
-    start === 'A3'
-  ){
-
-    if (
-      comfort === 'Too high'
-    ){
-
-      route.mode =
-        'lower';
-
-      route.direction =
-        'down';
-
-      route.queue = [
-        'F3',
-        'D3',
-        'Bb2',
-        'A2',
-        'G2'
-      ];
-
-      advanceRouteQueue();
-      return;
-    }
-
-
-    /*
-     * Easy / Okay / Too low:
-     * use C4 as the second routing probe.
-     */
-    showPattern(
-      'C4',
-      'Listen and echo'
-    );
-
-    return;
+  if (comfort === 'Too high'){
+    route.lastTooHighStart = start;
   }
 
-
-  /*
-   * SECOND CALIBRATION: C4
-   */
-  if (
-    route.mode === 'calibration' &&
-    start === 'C4'
-  ){
-
-    if (
-      comfort === 'Too high'
-    ){
-
-      route.mode =
-        'middle';
-
-      route.direction =
-        'down';
-
-      route.queue = [
-        'G3',
-        'F3',
-        'D3',
-        'Bb2'
-      ];
-
-      advanceRouteQueue();
-      return;
-    }
-
-
-    /*
-     * C4 was not too high.
-     * Explore as treble / upper-capable pathway.
-     */
-    route.mode =
-      'treble';
-
-    route.direction =
-      'down';
-
-    route.queue = [
-      'Bb3'
-    ];
-
-    advanceRouteQueue();
-    return;
+  if (comfort === 'Too low'){
+    route.lastTooLowStart = start;
   }
 
-
-  /*
-   * LOWER OR MIDDLE DOWNWARD EXPLORATION
-   */
-  if (
-    route.mode === 'lower' ||
-    route.mode === 'middle'
-  ){
-
-    if (
-      route.direction === 'down'
-    ){
-
-      /*
-       * Once something is too low,
-       * we have found the lower comfort boundary.
-       */
-      if (
-        comfort === 'Too low'
-      ){
-
-        finishPatterns();
-        return;
-      }
-
-
-      /*
-       * If it is still okay/easy,
-       * or even still too high,
-       * continue downward.
-       */
-      advanceRouteQueue();
-      return;
-    }
-  }
-
-
-  /*
-   * TREBLE: LOWER CHECK
-   */
-  if (
-    route.mode === 'treble' &&
-    route.direction === 'down'
-  ){
-
-    /*
-     * One lower check is enough.
-     * Then explore upward.
-     */
-    beginTrebleUpwardExploration();
-    return;
-  }
-
-
-  /*
-   * TREBLE: UPWARD EXPLORATION
-   */
-  if (
-    route.mode === 'treble' &&
-    route.direction === 'up'
-  ){
-
-    if (
-      comfort === 'Too high'
-    ){
-
-      finishPatterns();
-      return;
-    }
-
-
-    advanceRouteQueue();
-    return;
-  }
-
-
-  finishPatterns();
-}
-
-
-function advanceRouteQueue(){
-
-  while (
-    route.queue.length
-  ){
-
-    const next =
-      route.queue.shift();
-
-
-    if (
-      !tested(next)
-    ){
-
-      showPattern(
-        next,
-        'Listen and echo'
-      );
-
-      return;
-    }
-  }
-
-
-  /*
-   * When lower/middle queues end,
-   * there is no reason to climb back through a
-   * boundary already established by calibration.
-   */
-  if (
-    route.mode === 'lower' ||
-    route.mode === 'middle'
-  ){
-
+  if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
     finishPatterns();
     return;
   }
 
+  /* First probe: G3 -> D4 */
+  if (route.phase === 'start' && start === 'G3'){
 
-  if (
-    route.mode === 'treble' &&
-    route.direction === 'down'
-  ){
+    if (comfort === 'Too high'){
+      route.phase = 'seekLowerComfort';
+      route.queue = ['F3','D3','Bb2','A2','G2'];
+      advanceAdaptiveQueue();
+      return;
+    }
 
-    beginTrebleUpwardExploration();
+    if (comfort === 'Too low'){
+      route.phase = 'seekUpperComfort';
+      route.queue = ['A3','Bb3','C4','D4','F4','G4','A4','Bb4','C5','D5'];
+      advanceAdaptiveQueue();
+      return;
+    }
+
+    // G3 was comfortable: check a little lower before exploring upward.
+    route.phase = 'lowerProbe';
+    route.queue = ['F3','D3'];
+    advanceAdaptiveQueue();
     return;
   }
 
+  /* We started too high and are moving down until something works. */
+  if (route.phase === 'seekLowerComfort'){
+
+    if (comfort === 'Easy' || comfort === 'Okay'){
+      const lower = nextLowerStart_(start);
+
+      if (lower && !tested(lower) && uniquePatternCount() < MAX_SCALE_PATTERNS){
+        route.phase = 'finalLowerProbe';
+        showPattern(lower, 'Listen and echo');
+      } else {
+        finishPatterns();
+      }
+      return;
+    }
+
+    if (comfort === 'Too low'){
+      const bridge = midpointProbe_(route.lastTooHighStart, start);
+
+      if (bridge && !tested(bridge) && uniquePatternCount() < MAX_SCALE_PATTERNS){
+        route.phase = 'bracketProbe';
+        showPattern(bridge, 'Listen and echo');
+      } else {
+        finishPatterns();
+      }
+      return;
+    }
+
+    advanceAdaptiveQueue();
+    return;
+  }
+
+  /* One lower check after a comfortable lower/changing-voice window. */
+  if (route.phase === 'finalLowerProbe'){
+    finishPatterns();
+    return;
+  }
+
+  /* G3 worked; check F3/D3, then explore upward. */
+  if (route.phase === 'lowerProbe'){
+
+    if (comfort === 'Easy' || comfort === 'Okay'){
+      if (route.queue.length && uniquePatternCount() < MAX_SCALE_PATTERNS){
+        advanceAdaptiveQueue();
+      } else {
+        beginUpperExploration_();
+      }
+      return;
+    }
+
+    // Once the lower probe is too low (or unexpectedly too high),
+    // the comfortable G3 evidence is enough to begin moving upward.
+    beginUpperExploration_();
+    return;
+  }
+
+  /* G3 was too low; move upward until the first comfortable window. */
+  if (route.phase === 'seekUpperComfort'){
+
+    if (comfort === 'Easy' || comfort === 'Okay'){
+      beginUpperExploration_(start);
+      return;
+    }
+
+    if (comfort === 'Too high'){
+      const bridge = midpointProbe_(route.lastTooLowStart, start);
+
+      if (bridge && !tested(bridge) && uniquePatternCount() < MAX_SCALE_PATTERNS){
+        route.phase = 'bracketProbe';
+        showPattern(bridge, 'Listen and echo');
+      } else {
+        finishPatterns();
+      }
+      return;
+    }
+
+    advanceAdaptiveQueue();
+    return;
+  }
+
+  /* A midpoint pattern used only when Too low and Too high bracket each other. */
+  if (route.phase === 'bracketProbe'){
+
+    if (comfort === 'Easy' || comfort === 'Okay'){
+      beginUpperExploration_(start);
+    } else {
+      finishPatterns();
+    }
+    return;
+  }
+
+  /* Once a comfortable window exists, explore upward to the first Too high. */
+  if (route.phase === 'upperExplore'){
+
+    if (comfort === 'Too high'){
+      finishPatterns();
+      return;
+    }
+
+    advanceAdaptiveQueue();
+    return;
+  }
 
   finishPatterns();
 }
 
 
-function beginTrebleUpwardExploration(){
+function advanceAdaptiveQueue(){
 
-  route.direction =
-    'up';
+  if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
+    finishPatterns();
+    return;
+  }
+
+  while (route.queue.length){
+    const next = route.queue.shift();
+
+    if (!tested(next)){
+      showPattern(next, 'Listen and echo');
+      return;
+    }
+  }
+
+  finishPatterns();
+}
 
 
-  route.queue = [
-    'D4',
-    'F4',
-    'A4',
-    'C5',
-    'D5'
-  ];
+function beginUpperExploration_(fromStart){
+  route.phase = 'upperExplore';
+
+  const anchor = fromStart || bestComfortableStartName_() || 'G3';
+  const anchorMidi = NOTE_TO_MIDI[anchor];
+
+  route.queue = UPPER_SEQUENCE.filter(function(name){
+    return NOTE_TO_MIDI[name] > anchorMidi && !tested(name);
+  });
+
+  advanceAdaptiveQueue();
+}
 
 
-  advanceRouteQueue();
+function nextLowerStart_(start){
+  const index = LOWER_SEQUENCE.indexOf(start);
+
+  if (index >= 0 && index + 1 < LOWER_SEQUENCE.length){
+    return LOWER_SEQUENCE[index + 1];
+  }
+
+  const startMidi = NOTE_TO_MIDI[start];
+  const lower = LOWER_SEQUENCE.filter(function(name){
+    return NOTE_TO_MIDI[name] < startMidi && !tested(name);
+  });
+
+  return lower.length ? lower[0] : '';
+}
+
+
+function midpointProbe_(lowStart, highStart){
+  if (!lowStart || !highStart){
+    return '';
+  }
+
+  const lowMidi = Math.min(NOTE_TO_MIDI[lowStart], NOTE_TO_MIDI[highStart]);
+  const highMidi = Math.max(NOTE_TO_MIDI[lowStart], NOTE_TO_MIDI[highStart]);
+  const midpoint = (lowMidi + highMidi) / 2;
+
+  const candidates = Object.keys(NOTE_TO_MIDI)
+    .filter(function(name){
+      const midi = NOTE_TO_MIDI[name];
+      return midi > lowMidi && midi < highMidi && !tested(name);
+    })
+    .sort(function(a,b){
+      return Math.abs(NOTE_TO_MIDI[a] - midpoint) -
+             Math.abs(NOTE_TO_MIDI[b] - midpoint);
+    });
+
+  return candidates.length ? candidates[0] : '';
 }
 
 
 function finishPatterns(){
+  if (comfortablePatternCount() > 0){
+    showSustained();
+    return;
+  }
 
-  showSustained();
+  state.noComfortablePattern = true;
+  state.patternHistory.push({
+    exercise:'CONTROLLED_PATTERN_ROUTING',
+    comfort:'No comfortable five-note window found'
+  });
+
+  showNoComfortablePattern_();
 }
 
 
-function stopPatternAssessment(){
+function showNoComfortablePattern_(){
+  setProgress(6);
 
-  finishPatterns();
+  app().innerHTML = `
+    <div class="card">
+      <div class="stepTitle">Voice Discovery</div>
+      <h2>Thanks — that gave us useful information.</h2>
+      <p>
+        The app did not find one five-note pattern that felt comfortable enough
+        to use for the final pitch exercises. That is okay and is useful for your teacher to know.
+      </p>
+      <p class="muted">
+        You do not need to force your voice higher or lower.
+      </p>
+      <div class="btnrow">
+        <button class="primary bigbtn" onclick="showFinish()">Continue</button>
+      </div>
+    </div>
+  `;
 }
 
 
@@ -2981,59 +2951,54 @@ function stopPatternAssessment(){
  * COMFORTABLE SUSTAINED "OO"
  ********************************************************************/
 
-function bestComfortableStart(){
+function comfortableStarts_(preferredComfort){
+  return state.patternHistory
+    .filter(function(item){
+      if (!item.start){
+        return false;
+      }
 
-  const successes =
-    state.patternHistory
+      if (preferredComfort){
+        return item.comfort === preferredComfort;
+      }
 
-      .filter(
-        function(item){
-
-          return (
-            item.comfort === 'Easy' ||
-            item.comfort === 'Okay'
-          );
-        }
-      )
-
-      .map(
-        function(item){
-
-          return NOTE_TO_MIDI[
-            item.start
-          ];
-        }
-      )
-
-      .filter(
-        function(value){
-
-          return Number.isFinite(
-            value
-          );
-        }
-      )
-
-      .sort(
-        function(a,b){
-
-          return a - b;
-        }
-      );
+      return item.comfort === 'Easy' || item.comfort === 'Okay';
+    })
+    .map(function(item){
+      return item.start;
+    })
+    .filter(function(name, index, array){
+      return NOTE_TO_MIDI[name] !== undefined && array.indexOf(name) === index;
+    })
+    .sort(function(a,b){
+      return NOTE_TO_MIDI[a] - NOTE_TO_MIDI[b];
+    });
+}
 
 
-  if (!successes.length){
+function bestComfortableStartName_(){
+  let starts = comfortableStarts_('Easy');
 
-    return NOTE_TO_MIDI['C4'];
+  if (!starts.length){
+    starts = comfortableStarts_('Okay');
   }
 
+  if (!starts.length){
+    return '';
+  }
 
-  return successes[
-    Math.floor(
-      (successes.length - 1) /
-      2
-    )
+  return starts[
+    Math.floor((starts.length - 1) / 2)
   ];
+}
+
+
+function bestComfortableStart(){
+  const name = bestComfortableStartName_();
+
+  return name
+    ? NOTE_TO_MIDI[name]
+    : null;
 }
 
 
@@ -3044,6 +3009,11 @@ function showSustained(){
 
   const comfortableTonic =
     bestComfortableStart();
+
+  if (comfortableTonic === null){
+    showNoComfortablePattern_();
+    return;
+  }
 
 
   /*
@@ -3131,7 +3101,7 @@ async function listenSustain(){
       <p>
         Now hold <b>“oo”</b>
         comfortably for about 4 seconds.
-        Do not push.
+        Do not push. If singing ever hurts, stop singing and tell Mr. Zini.
       </p>
 
       <div class="btnrow">
@@ -3141,14 +3111,6 @@ async function listenSustain(){
           onclick="recordSustain()">
 
           I’m ready
-
-        </button>
-
-        <button
-          class="secondary"
-          onclick="showLeap()">
-
-          Skip this one
 
         </button>
 
@@ -3259,6 +3221,11 @@ function showLeap(){
   state._leapTonic =
     bestComfortableStart();
 
+  if (state._leapTonic === null){
+    showFinish();
+    return;
+  }
+
 
   app().innerHTML = `
 
@@ -3275,6 +3242,7 @@ function showLeap(){
       <p>
         This checks a different kind of
         pitch matching than the stepwise pattern.
+        The app chose a starting pitch from a pattern that felt comfortable.
       </p>
 
       <div
@@ -3289,14 +3257,6 @@ function showLeap(){
           onclick="listenLeap()">
 
           ▶ Listen
-
-        </button>
-
-        <button
-          class="secondary"
-          onclick="showFinish()">
-
-          Skip this one
 
         </button>
 
