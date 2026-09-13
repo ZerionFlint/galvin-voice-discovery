@@ -391,14 +391,26 @@
   </h1>
 
   <div class="languageBar">
-    <label for="globalLanguage">Language support:</label>
+    <label for="globalLanguage">Language:</label>
     <select id="globalLanguage" onchange="changeLanguage(this.value)">
       <option value="en">English</option>
       <option value="es">Español</option>
       <option value="pt">Português</option>
       <option value="ht">Kreyòl ayisyen</option>
       <option value="ar">العربية</option>
+      <option value="vi">Tiếng Việt</option>
+      <option value="zh">简体中文</option>
+      <option value="az">Azərbaycanca</option>
+      <option value="uk">Українська</option>
+      <option value="it">Italiano</option>
+      <option value="gu">ગુજરાતી</option>
+      <option value="ko">한국어</option>
+      <option value="hi">हिन्दी</option>
+      <option value="sq">Shqip</option>
+      <option value="km">ភាសាខ្មែរ</option>
+      <option value="ne">नेपाली</option>
     </select>
+    <button class="secondary" type="button" onclick="speakCurrentDirections()">🔊 Hear directions</button>
   </div>
 
   <div class="progress">
@@ -476,9 +488,8 @@ const NOTE_TO_MIDI = {
 /********************************************************************
  * LANGUAGE SUPPORT
  *
- * Core student directions remain in plain English. Students may also
- * choose a translated support card for each step. The translated card
- * never changes the musical task or any saved assessment data.
+ * The selected language translates the complete student-facing interface.
+ * Musical tasks and saved assessment data remain identical in every language.
  ********************************************************************/
 
 const LANGUAGE_LABELS = {
@@ -486,78 +497,24 @@ const LANGUAGE_LABELS = {
   es:'Español',
   pt:'Português',
   ht:'Kreyòl ayisyen',
-  ar:'العربية'
+  ar:'العربية',
+  vi:'Tiếng Việt',
+  zh:'简体中文',
+  az:'Azərbaycanca',
+  uk:'Українська',
+  it:'Italiano',
+  gu:'ગુજરાતી',
+  ko:'한국어',
+  hi:'हिन्दी',
+  sq:'Shqip',
+  km:'ភាសាខ្មែរ',
+  ne:'नेपाली'
 };
 
 const LANGUAGE_LOCALES = {
-  en:'en-US',
-  es:'es-US',
-  pt:'pt-BR',
-  ht:'ht-HT',
-  ar:'ar'
-};
-
-const LANGUAGE_HELP = {
-  es:{
-    welcome:'Esto no es una audición. Completar Voice Discovery puede contar como una tarea, pero no se califican tu voz, tu registro ni tu habilidad para cantar. Canta de manera cómoda y haz tu mejor esfuerzo.',
-    login:'Escribe el número de tu correo escolar y tu apellido. Luego selecciona “Let’s begin”.',
-    grade:'Selecciona el grado de coro en el que estás actualmente.',
-    mic:'Permite el acceso al micrófono y di “hello” con tu voz normal para comprobarlo.',
-    speech:'Usa tu voz normal al hablar. Después de la cuenta regresiva, di: 20, 19, 18, 17, 16, 15.',
-    happy:'Canta “Happy birthday dear [NAME]” con una voz cómoda. Empieza en cualquier nota que se sienta natural. Tú decides cuándo detener la grabación.',
-    pattern:'Escucha el patrón dos veces. Luego cántalo de vuelta usando “loo”. No tiene que ser perfecto.',
-    comfort:'Elige cómo se sintió: Easy, Okay, Too high o Too low. No hay una respuesta incorrecta.',
-    noComfort:'Gracias. Ya tenemos suficiente información. No necesitas forzar tu voz más alto ni más bajo.',
-    sustain:'Escucha una nota. Luego mantén “loo” cómodamente durante unos 4 segundos.',
-    leap:'Escucha dos veces. Luego canta el patrón de vuelta usando “loo”.',
-    finish:'¡Terminaste! Tu voz no fue calificada. El Sr. Zini usará esta información para ayudarte a encontrar la parte en la que puedas contribuir y tener más éxito en cada canción. Tu parte puede cambiar de una canción a otra.',
-    direct:'Abre Voice Discovery desde el enlace escolar en Google Classroom mientras estás conectado a tu cuenta @wpsstudent.org.'
-  },
-  pt:{
-    welcome:'Isto não é uma audição. Concluir o Voice Discovery pode contar como uma tarefa, mas sua voz, sua extensão vocal e sua habilidade de cantar não serão avaliadas. Cante com conforto e faça o seu melhor.',
-    login:'Digite o número do seu e-mail escolar e seu sobrenome. Depois selecione “Let’s begin”.',
-    grade:'Selecione a série do coro em que você está atualmente.',
-    mic:'Permita o acesso ao microfone e diga “hello” com sua voz normal para testar.',
-    speech:'Use sua voz normal de fala. Depois da contagem regressiva, diga: 20, 19, 18, 17, 16, 15.',
-    happy:'Cante “Happy birthday dear [NAME]” com uma voz confortável. Comece em qualquer nota que pareça natural. Você decide quando parar a gravação.',
-    pattern:'Ouça o padrão duas vezes. Depois cante de volta usando “loo”. Não precisa ser perfeito.',
-    comfort:'Escolha como se sentiu: Easy, Okay, Too high ou Too low. Não há resposta errada.',
-    noComfort:'Obrigado. Já temos informação suficiente. Você não precisa forçar sua voz mais aguda ou mais grave.',
-    sustain:'Ouça uma nota. Depois sustente “loo” confortavelmente por cerca de 4 segundos.',
-    leap:'Ouça duas vezes. Depois cante o padrão de volta usando “loo”.',
-    finish:'Você terminou! Sua voz não foi avaliada. O Sr. Zini usará estas informações para ajudar a encontrar a parte em que você pode contribuir e ter mais sucesso em cada música. Sua parte pode mudar de uma música para outra.',
-    direct:'Abra o Voice Discovery pelo link da escola no Google Classroom enquanto estiver conectado à sua conta @wpsstudent.org.'
-  },
-  ht:{
-    welcome:'Sa a se pa yon odisyon. Fini Voice Discovery ka konte kòm yon devwa, men yo pa bay nòt pou vwa ou, etandi vwa ou, oswa kapasite ou pou chante. Chante alèz epi fè sa ou kapab.',
-    login:'Antre nimewo imèl lekòl ou ak siyati ou. Apre sa, chwazi “Let’s begin”.',
-    grade:'Chwazi klas koral ou ye ladan kounye a.',
-    mic:'Pèmèt mikwofòn nan epi di “hello” ak vwa nòmal ou pou teste li.',
-    speech:'Sèvi ak vwa nòmal ou lè w ap pale. Apre dekont lan, di: 20, 19, 18, 17, 16, 15.',
-    happy:'Chante “Happy birthday dear [NAME]” ak yon vwa ki konfòtab. Kòmanse sou nenpòt nòt ki santi l natirèl. Se ou ki deside lè pou sispann anrejistreman an.',
-    pattern:'Koute modèl la de fwa. Apre sa, chante li tounen sou “loo”. Li pa bezwen pafè.',
-    comfort:'Chwazi kijan li te santi: Easy, Okay, Too high, oswa Too low. Pa gen move repons.',
-    noComfort:'Mèsi. Nou gen ase enfòmasyon. Ou pa bezwen fòse vwa ou pi wo oswa pi ba.',
-    sustain:'Koute yon nòt. Apre sa, kenbe “loo” alèz pandan anviwon 4 segonn.',
-    leap:'Koute de fwa. Apre sa, chante modèl la tounen sou “loo”.',
-    finish:'Ou fini! Yo pa t bay nòt pou vwa ou. Mesye Zini ap sèvi ak enfòmasyon sa yo pou ede jwenn pati kote ou ka kontribye epi reyisi plis nan chak chante. Pati ou ka chanje selon chante a.',
-    direct:'Louvri Voice Discovery soti nan lyen lekòl la nan Google Classroom pandan ou konekte ak kont @wpsstudent.org ou.'
-  },
-  ar:{
-    welcome:'هذا ليس اختبار أداء. قد يُحتسب إكمال Voice Discovery كواجب، لكن صوتك ومداه وقدرتك على الغناء لا تُعطى عليها درجات. غنِّ براحة وابذل أفضل ما لديك.',
-    login:'اكتب رقم بريدك المدرسي واسم عائلتك، ثم اختر “Let’s begin”.',
-    grade:'اختر صف الكورال الذي تدرس فيه حاليًا.',
-    mic:'اسمح باستخدام الميكروفون وقل “hello” بصوتك العادي للتأكد من أنه يعمل.',
-    speech:'استخدم صوتك العادي في الكلام. بعد العد التنازلي قل: 20، 19، 18، 17، 16، 15.',
-    happy:'غنِّ “Happy birthday dear [NAME]” بصوت مريح. ابدأ من أي نغمة تبدو طبيعية لك. أنت تقرر متى توقف التسجيل.',
-    pattern:'استمع إلى النمط مرتين، ثم غنّه مرة أخرى على مقطع “loo”. لا يجب أن يكون مثاليًا.',
-    comfort:'اختر كيف شعرت: Easy أو Okay أو Too high أو Too low. لا توجد إجابة خاطئة.',
-    noComfort:'شكرًا. لدينا معلومات كافية. لا تحتاج إلى دفع صوتك إلى أعلى أو أسفل.',
-    sustain:'استمع إلى نغمة واحدة، ثم حافظ على “loo” براحة لمدة نحو 4 ثوانٍ.',
-    leap:'استمع مرتين، ثم غنِّ النمط مرة أخرى على “loo”.',
-    finish:'لقد انتهيت! لم يتم تقييم صوتك بدرجة. سيستخدم الأستاذ زيني هذه المعلومات لمساعدتك في العثور على الجزء الذي يمكنك أن تساهم فيه وتنجح أكثر في كل أغنية. قد يتغير الجزء الذي تغنيه من أغنية إلى أخرى.',
-    direct:'افتح Voice Discovery من رابط المدرسة في Google Classroom أثناء تسجيل الدخول بحسابك @wpsstudent.org.'
-  }
+  en:'en-US', es:'es-US', pt:'pt-BR', ht:'ht-HT', ar:'ar',
+  vi:'vi-VN', zh:'zh-CN', az:'az-AZ', uk:'uk-UA', it:'it-IT',
+  gu:'gu-IN', ko:'ko-KR', hi:'hi-IN', sq:'sq-AL', km:'km-KH', ne:'ne-NP'
 };
 
 function initialLanguage(){
@@ -574,45 +531,134 @@ function changeLanguage(lang){
   if (!LANGUAGE_LABELS[lang]) lang = 'en';
   state.lang = lang;
   try{ localStorage.setItem('galvinVdLanguage', lang); } catch(e){}
+  document.documentElement.lang = lang;
+  document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
   const select = document.getElementById('globalLanguage');
   if (select) select.value = lang;
-  if (typeof state.currentScreen === 'function') state.currentScreen();
+
+  if (state._pendingReview){
+    renderPendingReview();
+  } else if (typeof state.currentScreen === 'function'){
+    state.currentScreen();
+  }
+
+  if (lang === 'en'){
+    document.querySelectorAll('[data-vd-english]').forEach(function(el){
+      el.textContent = el.dataset.vdEnglish;
+      el.dataset.vdLang = 'en';
+    });
+  } else {
+    schedulePageTranslation();
+  }
 }
 
-function languageHelp(key, replacements){
-  const lang = state && state.lang ? state.lang : 'en';
-  if (lang === 'en' || !LANGUAGE_HELP[lang] || !LANGUAGE_HELP[lang][key]) return '';
-  let text = LANGUAGE_HELP[lang][key];
-  replacements = replacements || {};
-  Object.keys(replacements).forEach(function(token){
-    text = text.split('[' + token + ']').join(replacements[token]);
-  });
-  const dir = lang === 'ar' ? 'rtl' : 'ltr';
-  return '<div class="langHelp" dir="' + dir + '">' +
-    '<b>' + esc(LANGUAGE_LABELS[lang]) + ':</b> ' + esc(text) +
-    '<br><button class="secondary" type="button" onclick="speakLanguageHelp(' + JSON.stringify(key) + ',' + JSON.stringify(replacements) + ')">🔊 Hear this direction</button>' +
-    '</div>';
-}
-
-function speakLanguageHelp(key, replacements){
-  const lang = state.lang || 'en';
-  if (lang === 'en' || !LANGUAGE_HELP[lang] || !LANGUAGE_HELP[lang][key]) return;
-  let text = LANGUAGE_HELP[lang][key];
-  replacements = replacements || {};
-  Object.keys(replacements).forEach(function(token){
-    text = text.split('[' + token + ']').join(replacements[token]);
-  });
-  if (!('speechSynthesis' in window)) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = LANGUAGE_LOCALES[lang] || lang;
-  window.speechSynthesis.speak(utterance);
-}
+/* Old translated support cards are intentionally removed in vNext2.3.1.
+   The selected language now translates the actual student interface. */
+function languageHelp(){ return ''; }
+function speakLanguageHelp(){ speakCurrentDirections(); }
 
 function setCurrentScreen(fn){
   state.currentScreen = fn;
   const select = document.getElementById('globalLanguage');
   if (select) select.value = state.lang || 'en';
+  setTimeout(schedulePageTranslation, 0);
+}
+
+let _translationTimer = null;
+let _translationBusy = false;
+let _translationQueued = false;
+
+function translatableElements(){
+  const selectors = [
+    '#app h2', '#app h3', '#app p', '#app label', '#app button',
+    '#app summary', '#app .stepTitle', '#app .status', '#app .cheer',
+    '#app .term', '.languageBar label', '.languageBar button'
+  ].join(',');
+
+  return Array.from(document.querySelectorAll(selectors)).filter(function(el){
+    if (el.closest('.contourWrap')) return false;
+    if (el.tagName === 'BUTTON' && el.onclick && String(el.onclick).includes('speakCurrentDirections')) return true;
+    return true;
+  });
+}
+
+function schedulePageTranslation(){
+  if (!state || !state.lang || state.lang === 'en') return;
+  clearTimeout(_translationTimer);
+  _translationTimer = setTimeout(translateCurrentScreen, 90);
+}
+
+async function translateCurrentScreen(){
+  if (!state || state.lang === 'en') return;
+  if (!window.opener || window.opener.closed) return;
+  if (_translationBusy){
+    _translationQueued = true;
+    return;
+  }
+
+  _translationBusy = true;
+  const langAtStart = state.lang;
+
+  try{
+    const elements = translatableElements().filter(function(el){
+      return el.dataset.vdLang !== langAtStart && (el.innerText || el.textContent || '').trim();
+    });
+
+    for (let offset = 0; offset < elements.length; offset += 50){
+      if (state.lang !== langAtStart) return;
+      const batch = elements.slice(offset, offset + 50);
+      const strings = batch.map(function(el){
+        if (!el.dataset.vdEnglish) el.dataset.vdEnglish = (el.innerText || el.textContent || '').trim();
+        return el.dataset.vdEnglish;
+      });
+
+      const protect = [
+        state.firstName || '',
+        state.lastName || '',
+        state.enrollment && state.enrollment.studentName ? state.enrollment.studentName : ''
+      ].filter(Boolean);
+
+      const result = await api('translateBatch', {
+        lang:langAtStart,
+        strings:strings,
+        protect:protect
+      });
+
+      const translated = result && result.translations ? result.translations : [];
+      batch.forEach(function(el, i){
+        if (state.lang !== langAtStart) return;
+        el.dataset.vdLang = langAtStart;
+        el.textContent = translated[i] || strings[i];
+      });
+    }
+  } catch(err){
+    console.warn('Translation unavailable:', err);
+  } finally {
+    _translationBusy = false;
+    if (_translationQueued){
+      _translationQueued = false;
+      schedulePageTranslation();
+    }
+  }
+}
+
+function speakCurrentDirections(){
+  if (!('speechSynthesis' in window)) return;
+  const root = document.getElementById('app');
+  if (!root) return;
+  const text = (root.innerText || '').replace(/\s+/g,' ').trim();
+  if (!text) return;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = LANGUAGE_LOCALES[state.lang] || 'en-US';
+  window.speechSynthesis.speak(u);
+}
+
+function startTranslationObserver(){
+  const root = document.getElementById('app');
+  if (!root || typeof MutationObserver === 'undefined') return;
+  const observer = new MutationObserver(function(){ schedulePageTranslation(); });
+  observer.observe(root, {childList:true, subtree:true});
 }
 
 /********************************************************************
@@ -635,7 +681,10 @@ let state = {
 
   patternHistory:[],
   samplesSaved:0,
-  noComfortablePattern:false
+  noComfortablePattern:false,
+
+  recordingRetries:{},
+  _pendingReview:null
 };
 
 let pending = {};
@@ -1846,6 +1895,94 @@ async function countdown(){
 
 
 /********************************************************************
+ * RECORDING REVIEW
+ * Every saved sample uses manual Start/Stop and one optional re-record.
+ * Nothing is uploaded until the student chooses “Use this recording.”
+ ********************************************************************/
+
+function queueRecordingReview(config){
+  state._pendingReview = config;
+  renderPendingReview();
+}
+
+function renderPendingReview(){
+  const review = state._pendingReview;
+  if (!review) return;
+  const area = document.getElementById(review.areaId);
+  if (!area) return;
+
+  const usedRetries = state.recordingRetries[review.key] || 0;
+  area.innerHTML = `
+    <div class="status ok"><b>Recording captured ✓</b></div>
+    <p>You do not need to listen to it. Use this recording, or try it one more time if you want.</p>
+    <div class="btnrow">
+      <button class="primary bigbtn" onclick="usePendingRecording()">Use this recording</button>
+      ${usedRetries < 1 ? '<button class="secondary bigbtn" onclick="retryPendingRecording()">Try again</button>' : ''}
+    </div>
+  `;
+  schedulePageTranslation();
+}
+
+async function usePendingRecording(){
+  const review = state._pendingReview;
+  if (!review) return;
+  disableButtons();
+  const area = document.getElementById(review.areaId);
+  if (area) area.innerHTML = '<div class="status warn">Saving securely…</div>';
+
+  try{
+    await uploadRecording(
+      review.exerciseId,
+      review.exerciseType,
+      review.recording,
+      review.meta || {},
+      review.attempt || 1
+    );
+
+    state._pendingReview = null;
+
+    if (review.kind === 'speech'){
+      area.innerHTML = '<div class="status ok">Got it! ✓ Nice job.</div><div class="btnrow"><button class="primary" onclick="showHappyBirthday()">Continue</button></div>';
+    } else if (review.kind === 'happy'){
+      area.innerHTML = '<div class="status ok">Got it! ✓ Nice work.</div><p class="muted">Now we’ll try a few short patterns.</p><div class="btnrow"><button class="primary" onclick="beginPatterns()">Continue</button></div>';
+    } else if (review.kind === 'pattern'){
+      area.innerHTML = comfortButtons(review.exerciseId, review.attempt || 1);
+    } else if (review.kind === 'sustain'){
+      area.innerHTML = '<div class="status ok">Perfect — got it! ✓</div><div class="btnrow"><button class="primary" onclick="showLeap()">Continue</button></div>';
+    } else if (review.kind === 'leap'){
+      area.innerHTML = '<div class="status ok">Nice job! ✓ Singing part finished.</div><div class="btnrow"><button class="primary" onclick="showFinish()">Continue</button></div>';
+    }
+
+    schedulePageTranslation();
+  } catch(err){
+    if (area) area.innerHTML = '<div class="status bad">' + esc(err.message) + '</div><div class="btnrow"><button class="secondary" onclick="renderPendingReview()">Back</button></div>';
+    schedulePageTranslation();
+  }
+}
+
+async function retryPendingRecording(){
+  const review = state._pendingReview;
+  if (!review) return;
+  const usedRetries = state.recordingRetries[review.key] || 0;
+  if (usedRetries >= 1) return;
+
+  state.recordingRetries[review.key] = usedRetries + 1;
+  state._pendingReview = null;
+
+  if (review.kind === 'speech'){
+    await recordSpeech();
+  } else if (review.kind === 'happy'){
+    await recordHappy();
+  } else if (review.kind === 'pattern'){
+    await listenCurrent();
+  } else if (review.kind === 'sustain'){
+    await listenSustain();
+  } else if (review.kind === 'leap'){
+    await listenLeap();
+  }
+}
+
+/********************************************************************
  * SPEAKING SAMPLE
  ********************************************************************/
 
@@ -1888,7 +2025,7 @@ function showSpeech(){
           class="primary bigbtn"
           onclick="recordSpeech()">
 
-          I’m ready
+          Start recording
 
         </button>
 
@@ -1902,76 +2039,22 @@ function showSpeech(){
 
 
 async function recordSpeech(){
-
   disableButtons();
-
   await countdown();
-
-
-  const msg =
-    document.getElementById(
-      'taskMsg'
-    );
-
-
-  msg.innerHTML =
-
-    '<div class="recording">' +
-
-    '<span class="dot"></span>' +
-
-    'Recording… speak normally.' +
-
-    '</div>';
-
+  const msg = document.getElementById('taskMsg');
+  msg.innerHTML = '<div class="recording"><span class="dot"></span>Recording… speak normally.</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  schedulePageTranslation();
 
   try{
-
-    const recording =
-      await captureAudio(
-        6,
-        false
-      );
-
-
-    msg.innerHTML =
-      '<div class="status warn">' +
-      'Saving securely…' +
-      '</div>';
-
-
-    await uploadRecording(
-      'SPEECH_20_TO_15',
-      'speech',
-      recording,
-      {}
-    );
-
-
-    msg.innerHTML =
-
-      '<div class="status ok">' +
-
-      'Got it! ✓ Nice job.' +
-
-      '</div>' +
-
-      '<div class="btnrow">' +
-
-      '<button class="primary" onclick="showHappyBirthday()">' +
-
-      'Continue' +
-
-      '</button>' +
-
-      '</div>';
-
+    const recording = await captureAudio(20, true);
+    queueRecordingReview({
+      kind:'speech', key:'speech', areaId:'taskMsg',
+      exerciseId:'SPEECH_20_TO_15', exerciseType:'speech',
+      recording:recording, meta:{}, attempt:1
+    });
   } catch(err){
-
-    msg.innerHTML =
-      '<div class="status bad">' +
-      esc(err.message) +
-      '</div>';
+    msg.innerHTML = '<div class="status bad">' + esc(err.message) + '</div>';
+    schedulePageTranslation();
   }
 }
 
@@ -2040,64 +2123,22 @@ function showHappyBirthday(){
 
 
 async function recordHappy(){
-
   disableButtons();
-
   await countdown();
-
-  const msg =
-    document.getElementById(
-      'taskMsg'
-    );
-
-  msg.innerHTML =
-    '<div class="recording">' +
-    '<span class="dot"></span>' +
-    'Recording… sing the whole phrase.' +
-    '</div>' +
-    '<div class="btnrow">' +
-    '<button class="primary bigbtn" onclick="stopManual()">' +
-    'Stop recording' +
-    '</button>' +
-    '</div>';
+  const msg = document.getElementById('taskMsg');
+  msg.innerHTML = '<div class="recording"><span class="dot"></span>Recording… sing the whole phrase.</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  schedulePageTranslation();
 
   try{
-
-    const recording =
-      await captureAudio(
-        20,
-        true
-      );
-
-    msg.innerHTML =
-      '<div class="status warn">' +
-      'Saving securely…' +
-      '</div>';
-
-    await uploadRecording(
-      'HAPPY_BIRTHDAY_DEAR_NAME',
-      'natural_song_phrase',
-      recording,
-      {}
-    );
-
-    msg.innerHTML =
-      '<div class="status ok">' +
-      'Got it! ✓ Nice work.' +
-      '</div>' +
-      '<p class="muted">Now we’ll try a few short patterns.</p>' +
-      '<div class="btnrow">' +
-      '<button class="primary" onclick="beginPatterns()">' +
-      'Continue' +
-      '</button>' +
-      '</div>';
-
+    const recording = await captureAudio(20, true);
+    queueRecordingReview({
+      kind:'happy', key:'happy', areaId:'taskMsg',
+      exerciseId:'HAPPY_BIRTHDAY_DEAR_NAME', exerciseType:'natural_song_phrase',
+      recording:recording, meta:{}, attempt:1
+    });
   } catch(err){
-
-    msg.innerHTML =
-      '<div class="status bad">' +
-      esc(err.message) +
-      '</div>';
+    msg.innerHTML = '<div class="status bad">' + esc(err.message) + '</div>';
+    schedulePageTranslation();
   }
 }
 
@@ -2627,7 +2668,7 @@ function showPattern(
       </p>
 
       <p class="muted">
-        Don’t worry about being perfect. Match what you hear as comfortably as you can.
+        Don’t worry about being perfect. Match what you hear as comfortably as you can. If you cannot comfortably continue, stop the recording — that is useful information.
       </p>
 
       <div
@@ -2705,7 +2746,7 @@ async function listenCurrent(){
           class="good bigbtn"
           onclick="recordCurrentPattern()">
 
-          I’m ready to sing
+          Start recording
 
         </button>
 
@@ -2719,85 +2760,24 @@ async function listenCurrent(){
 
 
 async function recordCurrentPattern(){
-
   disableButtons();
-
   await countdown();
+  const area = document.getElementById('patternAction');
+  area.innerHTML = '<div class="recording"><span class="dot"></span>Recording… sing the pattern on “loo.”</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  schedulePageTranslation();
 
-
-  const area =
-    document.getElementById(
-      'patternAction'
-    );
-
-
-  area.innerHTML =
-
-    '<div class="recording">' +
-
-    '<span class="dot"></span>' +
-
-    'Recording… sing the pattern on “loo.”' +
-
-    '</div>';
-
-
-  const pattern =
-    state._currentPattern;
-
-
+  const pattern = state._currentPattern;
   try{
-
-    const beat =
-      60 / TEMPO;
-
-
-    /*
-     * Eight regular beats plus
-     * two beats for the final Do,
-     * plus a short safety margin.
-     */
-    const recording =
-      await captureAudio(
-        (10 * beat) + 2,
-        false
-      );
-
-
-    const exerciseId =
-      'SCALE_' +
-      pattern.startName
-        .replace('b','FLAT')
-        .replace('#','SHARP');
-
-
-    area.innerHTML =
-      '<div class="status warn">' +
-      'Recording captured — saving securely…' +
-      '</div>';
-
-
-    await uploadRecording(
-      exerciseId,
-      'scale_echo',
-      recording,
-      pattern.meta,
-      pattern.attempt
-    );
-
-
-    area.innerHTML =
-      comfortButtons(
-        exerciseId,
-        pattern.attempt
-      );
-
+    const recording = await captureAudio(20, true);
+    const exerciseId = 'SCALE_' + pattern.startName.replace('b','FLAT').replace('#','SHARP');
+    queueRecordingReview({
+      kind:'pattern', key:'pattern:' + exerciseId, areaId:'patternAction',
+      exerciseId:exerciseId, exerciseType:'scale_echo',
+      recording:recording, meta:pattern.meta, attempt:pattern.attempt || 1
+    });
   } catch(err){
-
-    area.innerHTML =
-      '<div class="status bad">' +
-      esc(err.message) +
-      '</div>';
+    area.innerHTML = '<div class="status bad">' + esc(err.message) + '</div>';
+    schedulePageTranslation();
   }
 }
 
@@ -2837,16 +2817,6 @@ function comfortButtons(
         Too low
       </button>
 
-      ${
-        attempt === 1
-          ? `
-            <button
-              onclick="retryPattern('${exerciseId}',${attempt})">
-              Hear it again & try once more
-            </button>
-          `
-          : ''
-      }
 
     </div>
 
@@ -3372,7 +3342,7 @@ function showSustained(){
       </p>
 
       <p class="muted">
-        Keep your voice easy and relaxed. Never push or strain.
+        Keep your voice easy and relaxed. Never push or strain. You may stop the recording whenever you need to.
       </p>
 
       <div class="btnrow">
@@ -3435,7 +3405,7 @@ async function listenSustain(){
           class="good"
           onclick="recordSustain()">
 
-          I’m ready
+          Start recording
 
         </button>
 
@@ -3445,91 +3415,28 @@ async function listenSustain(){
 
 
 async function recordSustain(){
-
   disableButtons();
-
   await countdown();
-
-
-  const area =
-    document.getElementById(
-      'sustainAction'
-    );
-
-
-  area.innerHTML =
-
-    '<div class="recording">' +
-
-    '<span class="dot"></span>' +
-
-    'Hold “loo”…' +
-
-    '</div>';
-
+  const area = document.getElementById('sustainAction');
+  area.innerHTML = '<div class="recording"><span class="dot"></span>Recording… hold “loo” comfortably.</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  schedulePageTranslation();
 
   try{
-
-    const recording =
-      await captureAudio(
-        5,
-        false
-      );
-
-
-    const pitchName =
-      nameForMidi(
-        state._sustainMidi
-      );
-
-
-    await uploadRecording(
-      'SUSTAIN_' +
-      pitchName.replace('#','SHARP'),
-      'sustained_loo',
-      recording,
-      {
-        expectedPitches:
-          pitchName,
-
-        expectedMidi:
-          String(
-            state._sustainMidi
-          ),
-
-        solfege:
-          'Do',
-
-        tonic:
-          pitchName
+    const recording = await captureAudio(20, true);
+    const pitchName = nameForMidi(state._sustainMidi);
+    queueRecordingReview({
+      kind:'sustain', key:'sustain', areaId:'sustainAction',
+      exerciseId:'SUSTAIN_' + pitchName.replace('#','SHARP'),
+      exerciseType:'sustained_loo', recording:recording, attempt:1,
+      meta:{
+        expectedPitches:pitchName,
+        expectedMidi:String(state._sustainMidi),
+        solfege:'Do', tonic:pitchName
       }
-    );
-
-
-    area.innerHTML =
-
-      '<div class="status ok">' +
-
-      'Perfect — got it! ✓' +
-
-      '</div>' +
-
-      '<div class="btnrow">' +
-
-      '<button class="primary" onclick="showLeap()">' +
-
-      'Continue' +
-
-      '</button>' +
-
-      '</div>';
-
+    });
   } catch(err){
-
-    area.innerHTML =
-      '<div class="status bad">' +
-      esc(err.message) +
-      '</div>';
+    area.innerHTML = '<div class="status bad">' + esc(err.message) + '</div>';
+    schedulePageTranslation();
   }
 }
 
@@ -3643,7 +3550,7 @@ async function listenLeap(){
           class="good"
           onclick="recordLeap()">
 
-          I’m ready to sing
+          Start recording
 
         </button>
 
@@ -3653,112 +3560,30 @@ async function listenLeap(){
 
 
 async function recordLeap(){
-
   disableButtons();
-
   await countdown();
-
-
-  const area =
-    document.getElementById(
-      'leapAction'
-    );
-
-
-  area.innerHTML =
-
-    '<div class="recording">' +
-
-    '<span class="dot"></span>' +
-
-    'Recording…' +
-
-    '</div>';
-
+  const area = document.getElementById('leapAction');
+  area.innerHTML = '<div class="recording"><span class="dot"></span>Recording… sing the pattern on “loo.”</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  schedulePageTranslation();
 
   try{
-
-    const beat =
-      60 / TEMPO;
-
-
-    const recording =
-      await captureAudio(
-        (5 * beat) + 2,
-        false
-      );
-
-
-    const midis =
-      LEAP_INTERVALS.map(
-        function(interval){
-
-          return (
-            state._leapTonic +
-            interval
-          );
-        }
-      );
-
-
-    await uploadRecording(
-      'LEAP_' +
-      nameForMidi(
-        state._leapTonic
-      ).replace('#','SHARP'),
-
-      'leap_echo',
-
-      recording,
-
-      {
-        expectedPitches:
-          midis
-            .map(nameForMidi)
-            .join(' '),
-
-        expectedMidi:
-          midis.join(','),
-
-        solfege:
-          LEAP_SOLFEGE
-            .join('–'),
-
-        tonic:
-          nameForMidi(
-            state._leapTonic
-          ),
-
-        tempoBpm:
-          TEMPO
+    const recording = await captureAudio(20, true);
+    const midis = LEAP_INTERVALS.map(function(interval){ return state._leapTonic + interval; });
+    const tonicName = nameForMidi(state._leapTonic);
+    queueRecordingReview({
+      kind:'leap', key:'leap', areaId:'leapAction',
+      exerciseId:'LEAP_' + tonicName.replace('#','SHARP'),
+      exerciseType:'leap_echo', recording:recording, attempt:1,
+      meta:{
+        expectedPitches:midis.map(nameForMidi).join(' '),
+        expectedMidi:midis.join(','),
+        solfege:LEAP_SOLFEGE.join('–'),
+        tonic:tonicName, tempoBpm:TEMPO
       }
-    );
-
-
-    area.innerHTML =
-
-      '<div class="status ok">' +
-
-      'Nice job! ✓ Singing part finished.' +
-
-      '</div>' +
-
-      '<div class="btnrow">' +
-
-      '<button class="primary" onclick="showFinish()">' +
-
-      'Continue' +
-
-      '</button>' +
-
-      '</div>';
-
+    });
   } catch(err){
-
-    area.innerHTML =
-      '<div class="status bad">' +
-      esc(err.message) +
-      '</div>';
+    area.innerHTML = '<div class="status bad">' + esc(err.message) + '</div>';
+    schedulePageTranslation();
   }
 }
 
@@ -3927,6 +3752,9 @@ async function finalize(
 
 const initialSelect = document.getElementById('globalLanguage');
 if (initialSelect) initialSelect.value = state.lang;
+startTranslationObserver();
+document.documentElement.lang = state.lang || 'en';
+document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
 
 if (!window.opener || window.opener.closed){
   setCurrentScreen(function(){ window.location.reload(); });
