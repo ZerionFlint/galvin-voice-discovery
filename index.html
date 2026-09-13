@@ -295,6 +295,26 @@
     fill:var(--ink);
   }
 
+  .termGrid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-top:14px;
+  }
+
+  .term{
+    background:#fff;
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:12px 14px;
+    line-height:1.4;
+  }
+
+  .cheer{
+    font-weight:800;
+    color:var(--accent);
+  }
+
   .stepTitle{
     font-weight:800;
     color:var(--accent);
@@ -306,6 +326,7 @@
   @media(max-width:560px){
     h1{font-size:26px}
     .comforts{grid-template-columns:1fr}
+    .termGrid{grid-template-columns:1fr}
     .card{padding:17px}
   }
 </style>
@@ -320,7 +341,7 @@
   </div>
 
   <h1>
-    Private Voice Discovery
+    Voice Discovery
   </h1>
 
   <div class="progress">
@@ -487,6 +508,10 @@ window.addEventListener(
 
     const message = event.data;
 
+    if (event.source !== window.opener){
+      return;
+    }
+
     if (
       !message ||
       message.source !== 'galvin-vd-backend' ||
@@ -594,21 +619,33 @@ function showWelcome(){
     <div class="card soft">
 
       <h2>
-        This is private — and it is not an audition.
+        Welcome to Voice Discovery!
       </h2>
 
       <p>
-        We are finding where your voice feels comfortable
-        <b>right now</b>.
-        Middle-school voices change, and there is no
-        “good” or “bad” result.
+        This is <b>not an audition or a grade</b>.
+        It is a short way for Mr. Zini to learn where your singing voice feels most comfortable right now.
       </p>
 
       <p>
-        <b>
-          You will not have to listen to your own recording.
-        </b>
-        You may skip or stop if anything feels uncomfortable.
+        Singing voices can change a lot during grades 5–8.
+        The notes that feel easy, the sound of your voice, and the best place for you to sing can all shift as you grow.
+        For many singers, range becomes more consistent later in the teen years, and voices continue developing beyond middle school.
+      </p>
+
+      <p class="cheer">
+        There are no good or bad results. Sing comfortably and do your best.
+      </p>
+
+      <div class="termGrid" aria-label="Voice words to know">
+        <div class="term"><b>Range</b><br><span class="small">The notes your voice can sing from low to high.</span></div>
+        <div class="term"><b>Tessitura</b><br><span class="small">The part of your range where your voice feels most comfortable.</span></div>
+        <div class="term"><b>Tone</b><br><span class="small">The unique quality or color of your voice.</span></div>
+        <div class="term"><b>Voice part</b><br><span class="small">The musical line you sing in a song. Your part may change from song to song.</span></div>
+      </div>
+
+      <p class="small" style="margin-top:14px;">
+        Never push or strain your voice. If singing hurts, stop and tell Mr. Zini.
       </p>
 
     </div>
@@ -649,7 +686,7 @@ function showWelcome(){
           class="primary bigbtn"
           onclick="lookup()">
 
-          Continue
+          Let’s begin
 
         </button>
 
@@ -696,7 +733,7 @@ async function lookup(){
 
   msg.innerHTML =
     '<div class="status warn">' +
-    'Checking your chorus class…' +
+    'Checking your chorus enrollment…' +
     '</div>';
 
 
@@ -740,6 +777,8 @@ function showEnrollmentChoices(matches){
       .map(
         function(match){
 
+          const detail = match.label || ('Grade ' + match.grade);
+
           return `
 
             <button
@@ -751,14 +790,14 @@ function showEnrollmentChoices(matches){
               "
               onclick='chooseEnrollment(${JSON.stringify(match)})'>
 
-              <b>
-                ${esc(match.firstName)}
+              <b style="font-size:18px;">
+                Grade ${esc(match.grade)}
               </b>
 
               <br>
 
               <span class="small">
-                ${esc(match.label)}
+                ${esc(detail)}
               </span>
 
             </button>
@@ -773,8 +812,12 @@ function showEnrollmentChoices(matches){
     <div class="card">
 
       <h2>
-        Is this your chorus class?
+        Select your grade level
       </h2>
+
+      <p class="muted">
+        Choose your current chorus grade.
+      </p>
 
       ${buttons}
 
@@ -803,7 +846,7 @@ async function chooseEnrollment(match){
 
   app().innerHTML =
     '<div class="card">' +
-    '<h2>Getting your private voice check ready…</h2>' +
+    '<h2>Great — getting your Voice Discovery ready…</h2>' +
     '</div>';
 
 
@@ -876,27 +919,25 @@ function showMicSetup(firstName){
       </div>
 
       <h2>
-        Hi ${esc(firstName)}.
-        First, let’s make sure your microphone works.
+        Hi ${esc(firstName)}! Let’s get set up.
       </h2>
 
       <p>
-        Before you begin:
+        First, we’ll make sure your microphone is working.
       </p>
 
       <ul style="line-height:1.6; padding-left:24px;">
-        <li><b>Make sure your microphone is not muted.</b> Some devices have a microphone-mute key or switch.</li>
-        <li><b>Turn your device volume up enough to hear the examples clearly.</b> If you are using headphones, use a comfortable volume — not maximum.</li>
-        <li>Use a quiet room or quiet space if you can.</li>
+        <li>Make sure your microphone is <b>not muted</b>.</li>
+        <li>Turn your volume up enough to hear the examples comfortably.</li>
+        <li>Use a quiet space if you can.</li>
       </ul>
 
       <p>
-        Then click <b>Enable microphone</b>.
-        If your browser asks for permission, choose <b>Allow</b>.
+        Click <b>Enable microphone</b>. If your browser asks, choose <b>Allow</b>.
       </p>
 
-      <p class="muted">
-        You will not hear your own recorded voice.
+      <p class="small">
+        You will not have to listen to your own recordings.
       </p>
 
       <div class="btnrow">
@@ -1339,6 +1380,10 @@ async function captureAudio(
               );
 
 
+            clearTimeout(state._manualStopTimer);
+            state._manualStopTimer = null;
+            state._manualRecorder = null;
+
             resolve(
               {
                 blob:blob,
@@ -1377,6 +1422,17 @@ async function captureAudio(
 
     state._manualRecorder =
       recorder;
+
+    if (seconds > 0){
+      state._manualStopTimer = setTimeout(
+        function(){
+          if (recorder.state !== 'inactive'){
+            recorder.stop();
+          }
+        },
+        seconds * 1000
+      );
+    }
 
   } else {
 
@@ -1580,12 +1636,12 @@ function showSpeech(){
       </div>
 
       <h2>
-        Use your normal speaking voice.
+        Easy first one!
       </h2>
 
       <p>
-        When the countdown ends,
-        count backward:
+        Use your <b>normal speaking voice</b>.
+        When the countdown ends, say:
       </p>
 
       <p style="
@@ -1665,7 +1721,7 @@ async function recordSpeech(){
 
       '<div class="status ok">' +
 
-      'Recording captured ✓' +
+      'Got it! ✓ Nice job.' +
 
       '</div>' +
 
@@ -1709,11 +1765,11 @@ function showHappyBirthday(){
       </div>
 
       <h2>
-        Sing one short phrase in your natural singing voice.
+        Now let’s hear your natural singing voice.
       </h2>
 
       <p>
-        Sing only:
+        Sing just:
       </p>
 
       <p style="font-size:26px; font-weight:800;">
@@ -1722,12 +1778,11 @@ function showHappyBirthday(){
 
       <p>
         Start wherever your voice naturally wants to start.
-        There is no starting note to match.
+        <b>There is no starting note to match.</b>
       </p>
 
       <p class="muted">
-        Sing comfortably — do not push higher or lower than your voice wants to go.
-        You will not hear the recording afterward.
+        Keep it easy and comfortable. No need to sing extra high or low.
       </p>
 
       <div class="btnrow">
@@ -1736,7 +1791,7 @@ function showHappyBirthday(){
           class="primary bigbtn"
           onclick="recordHappy()">
 
-          I’m ready
+          Start recording
 
         </button>
 
@@ -1763,17 +1818,20 @@ async function recordHappy(){
   msg.innerHTML =
     '<div class="recording">' +
     '<span class="dot"></span>' +
-    'Recording… sing “Happy birthday dear ' +
-    esc(state.firstName || 'your name') +
-    '.”' +
+    'Recording… sing the whole phrase.' +
+    '</div>' +
+    '<div class="btnrow">' +
+    '<button class="primary bigbtn" onclick="stopManual()">' +
+    'Stop recording' +
+    '</button>' +
     '</div>';
 
   try{
 
     const recording =
       await captureAudio(
-        7,
-        false
+        20,
+        true
       );
 
     msg.innerHTML =
@@ -1790,8 +1848,9 @@ async function recordHappy(){
 
     msg.innerHTML =
       '<div class="status ok">' +
-      'Recording captured ✓' +
+      'Got it! ✓ Nice work.' +
       '</div>' +
+      '<p class="muted">Now we’ll try a few short patterns.</p>' +
       '<div class="btnrow">' +
       '<button class="primary" onclick="beginPatterns()">' +
       'Continue' +
@@ -2301,6 +2360,8 @@ function showPattern(
     );
 
 
+  state._comfortLocked = false;
+
   state._currentPattern = {
     startName:startName,
     label:label,
@@ -2318,24 +2379,16 @@ function showPattern(
       </div>
 
       <h2>
-        ${esc(label)}
+        Listen twice, then sing it back.
       </h2>
 
       <p>
-        First listen.
-        The solfege is:
-      </p>
-
-      <p style="
-        font-size:21px;
-        font-weight:800;
-      ">
-        Do – Re – Mi – Fa – Sol – Fa – Mi – Re – Do
+        You’ll hear a short pattern <b>two times</b>.
+        Listen first. Then sing the same pattern back on <b>“loo.”</b>
       </p>
 
       <p class="muted">
-        Notice that <b>Mi → Fa</b> is a smaller step.
-        The contour shows the actual high-and-low spacing.
+        Don’t worry about being perfect. Match what you hear as comfortably as you can.
       </p>
 
       <div
@@ -2349,7 +2402,7 @@ function showPattern(
           class="primary bigbtn"
           onclick="listenCurrent()">
 
-          ▶ Listen
+          ▶ Listen twice
 
         </button>
 
@@ -2384,6 +2437,14 @@ async function listenCurrent(){
     SCALE_SOLFEGE
   );
 
+  await sleep(450);
+
+  await playGenerated(
+    pattern.meta.startMidi,
+    SCALE_INTERVALS,
+    SCALE_SOLFEGE
+  );
+
 
   document
     .getElementById(
@@ -2392,12 +2453,11 @@ async function listenCurrent(){
     .innerHTML = `
 
       <div class="status ok">
-        Now it’s your turn.
+        Your turn!
       </div>
 
       <p>
-        Sing the same contour back on
-        <b>“loo.”</b>
+        Sing the same pattern back on <b>“loo.”</b>
       </p>
 
       <div class="btnrow">
@@ -2413,8 +2473,7 @@ async function listenCurrent(){
       </div>
 
       <p class="small">
-        If a pattern feels too high or too low, that is useful information.
-        Tell us afterward and the next pattern will adjust.
+        If it feels too high or too low, that is useful information. You’ll tell us right after you sing.
       </p>
     `;
 }
@@ -2439,7 +2498,7 @@ async function recordCurrentPattern(){
 
     '<span class="dot"></span>' +
 
-    'Recording your “loo” pattern…' +
+    'Recording… sing the pattern on “loo.”' +
 
     '</div>';
 
@@ -2512,7 +2571,7 @@ function comfortButtons(
   return `
 
     <h3>
-      How did that feel?
+      Nice! How did that feel?
     </h3>
 
     <div class="comforts">
@@ -2542,13 +2601,17 @@ function comfortButtons(
           ? `
             <button
               onclick="retryPattern('${exerciseId}',${attempt})">
-              Hear it and try this pattern one more time
+              Hear it again & try once more
             </button>
           `
           : ''
       }
 
     </div>
+
+    <p class="small">
+      Your answer helps choose the next pattern. There is no wrong answer.
+    </p>
   `;
 }
 
@@ -2557,6 +2620,13 @@ async function retryPattern(
   exerciseId,
   attempt
 ){
+
+  if (state._comfortLocked){
+    return;
+  }
+
+  state._comfortLocked = true;
+  disableButtons();
 
   try{
 
@@ -2584,6 +2654,7 @@ async function retryPattern(
   const pattern =
     state._currentPattern;
 
+  state._comfortLocked = false;
 
   showPattern(
     pattern.startName,
@@ -2599,9 +2670,16 @@ async function patternComfort(
   attempt
 ){
 
+  if (state._comfortLocked){
+    return;
+  }
+
+  state._comfortLocked = true;
+  disableButtons();
+
   try{
 
-    await api(
+    const result = await api(
       'comfort',
       {
         submissionCode:
@@ -2618,7 +2696,14 @@ async function patternComfort(
       }
     );
 
+    if (result && result.duplicate && result.existingComfort){
+      comfort = result.existingComfort;
+    }
+
   } catch(err){
+    state._comfortLocked = false;
+    alert(err.message || 'Could not save that answer. Please try again.');
+    return;
   }
 
 
@@ -2931,13 +3016,12 @@ function showNoComfortablePattern_(){
   app().innerHTML = `
     <div class="card">
       <div class="stepTitle">Voice Discovery</div>
-      <h2>Thanks — that gave us useful information.</h2>
+      <h2>That was helpful — thank you!</h2>
       <p>
-        The app did not find one five-note pattern that felt comfortable enough
-        to use for the final pitch exercises. That is okay and is useful for your teacher to know.
+        We have enough information from those patterns, so you do not need to push your voice any higher or lower.
       </p>
-      <p class="muted">
-        You do not need to force your voice higher or lower.
+      <p class="cheer">
+        Nice work. You’re almost done!
       </p>
       <div class="btnrow">
         <button class="primary bigbtn" onclick="showFinish()">Continue</button>
@@ -3016,11 +3100,7 @@ function showSustained(){
   }
 
 
-  /*
-   * Use Mi of a successful five-note pattern.
-   * That keeps the sustained note away from
-   * both the bottom and top of that pattern.
-   */
+  /* Use a pitch from the middle of a successful five-note pattern. */
   state._sustainMidi =
     comfortableTonic + 4;
 
@@ -3030,22 +3110,20 @@ function showSustained(){
     <div class="card">
 
       <div class="stepTitle">
-        Step 5 — Comfortable sustained sound
+        Step 5 — Sustained sound
       </div>
 
       <h2>
-        One easy “oo”
+        Nice work — almost there!
       </h2>
 
       <p>
-        The app chose a pitch from the middle
-        of a pattern that felt comfortable.
+        You’ll hear <b>one comfortable pitch</b>.
+        Listen, then hold <b>“loo”</b> on that pitch for about 4 seconds.
       </p>
 
-      <p>
-        For this exercise,
-        think of this single pitch as
-        <b>Do</b>.
+      <p class="muted">
+        Keep your voice easy and relaxed. Never push or strain.
       </p>
 
       <div class="btnrow">
@@ -3054,7 +3132,7 @@ function showSustained(){
           class="primary bigbtn"
           onclick="listenSustain()">
 
-          ▶ Hear your Do
+          ▶ Hear my pitch
 
         </button>
 
@@ -3099,9 +3177,7 @@ async function listenSustain(){
     .innerHTML = `
 
       <p>
-        Now hold <b>“oo”</b>
-        comfortably for about 4 seconds.
-        Do not push. If singing ever hurts, stop singing and tell Mr. Zini.
+        Your turn! Hold <b>“loo”</b> comfortably for about 4 seconds.
       </p>
 
       <div class="btnrow">
@@ -3138,7 +3214,7 @@ async function recordSustain(){
 
     '<span class="dot"></span>' +
 
-    'Hold “oo”…' +
+    'Hold “loo”…' +
 
     '</div>';
 
@@ -3161,7 +3237,7 @@ async function recordSustain(){
     await uploadRecording(
       'SUSTAIN_' +
       pitchName.replace('#','SHARP'),
-      'sustained_vowel',
+      'sustained_loo',
       recording,
       {
         expectedPitches:
@@ -3185,7 +3261,7 @@ async function recordSustain(){
 
       '<div class="status ok">' +
 
-      'Captured ✓' +
+      'Perfect — got it! ✓' +
 
       '</div>' +
 
@@ -3232,17 +3308,16 @@ function showLeap(){
     <div class="card">
 
       <div class="stepTitle">
-        Step 6 — One leap pattern
+        Step 6 — One last pattern
       </div>
 
       <h2>
-        Do – Mi – Sol – Mi – Do
+        One last singing pattern!
       </h2>
 
       <p>
-        This checks a different kind of
-        pitch matching than the stepwise pattern.
-        The app chose a starting pitch from a pattern that felt comfortable.
+        You’ll hear a short pattern with a few bigger jumps.
+        <b>Listen twice, then sing it back on “loo.”</b>
       </p>
 
       <div
@@ -3256,7 +3331,7 @@ function showLeap(){
           class="primary bigbtn"
           onclick="listenLeap()">
 
-          ▶ Listen
+          ▶ Listen twice
 
         </button>
 
@@ -3278,6 +3353,16 @@ function showLeap(){
 
 async function listenLeap(){
 
+  disableButtons();
+
+  await playGenerated(
+    state._leapTonic,
+    LEAP_INTERVALS,
+    LEAP_SOLFEGE
+  );
+
+  await sleep(450);
+
   await playGenerated(
     state._leapTonic,
     LEAP_INTERVALS,
@@ -3291,14 +3376,12 @@ async function listenLeap(){
     )
     .innerHTML = `
 
+      <div class="status ok">
+        Your turn!
+      </div>
+
       <p>
-        Your turn:
-        sing
-        <b>
-          Do – Mi – Sol – Mi – Do
-        </b>
-        on
-        <b>“loo.”</b>
+        Sing the pattern back on <b>“loo.”</b>
       </p>
 
       <div class="btnrow">
@@ -3307,7 +3390,7 @@ async function listenLeap(){
           class="good"
           onclick="recordLeap()">
 
-          I’m ready
+          I’m ready to sing
 
         </button>
 
@@ -3403,7 +3486,7 @@ async function recordLeap(){
 
       '<div class="status ok">' +
 
-      'Captured ✓' +
+      'Nice job! ✓ Singing part finished.' +
 
       '</div>' +
 
@@ -3445,8 +3528,12 @@ function showFinish(){
       </div>
 
       <h2>
-        How did the whole voice check feel?
+        You did it! One quick question:
       </h2>
+
+      <p>
+        How did Voice Discovery feel overall?
+      </p>
 
       <div class="comforts">
 
@@ -3456,13 +3543,13 @@ function showFinish(){
         </button>
 
         <button
-          onclick="finalize('Mostly okay')">
-          Mostly okay
+          onclick="finalize('Mostly comfortable')">
+          Mostly comfortable
         </button>
 
         <button
-          onclick="finalize('Nervous but manageable')">
-          Nervous but manageable
+          onclick="finalize('A little nervous, but okay')">
+          A little nervous, but okay
         </button>
 
         <button
@@ -3496,7 +3583,7 @@ async function finalize(
 
     '<div class="status warn">' +
 
-    'Finishing your private submission…' +
+    'Finishing your Voice Discovery…' +
 
     '</div>';
 
@@ -3541,24 +3628,27 @@ async function finalize(
       <div class="card">
 
         <h2>
-          You’re finished ✓
+          All done! 🎉
         </h2>
 
-        <p>
-          Thank you.
-          Your recordings were captured privately.
+        <p class="cheer">
+          Great job, ${esc(state.firstName || 'singer')}!
         </p>
 
         <p>
-          <b>
-            You did not have to listen to your own recorded voice.
-          </b>
+          Thanks for giving Voice Discovery a try.
+        </p>
+
+        <p>
+          Mr. Zini will use your recordings to help choose the chorus part that fits you best in each song — where your voice feels comfortable and you can contribute and succeed.
+        </p>
+
+        <p>
+          <b>Your part may change from song to song. That is normal.</b>
         </p>
 
         <p class="muted">
-          Your teacher will use the recordings
-          to find a comfortable chorus part.
-          This is not a grade or audition score.
+          This was not a grade or an audition. You’re finished — nice work!
         </p>
 
       </div>
@@ -3578,7 +3668,22 @@ async function finalize(
  * START
  ********************************************************************/
 
-showWelcome();
+if (!window.opener || window.opener.closed){
+  setProgress(1);
+  app().innerHTML = `
+    <div class="card">
+      <h2>Open Voice Discovery from Google Classroom</h2>
+      <p>
+        Start with the Galvin Voice Discovery school link while signed in to your <b>@wpsstudent.org</b> account.
+      </p>
+      <p class="muted">
+        Keep the first school tab open while you complete Voice Discovery.
+      </p>
+    </div>
+  `;
+} else {
+  showWelcome();
+}
 
 </script>
 
