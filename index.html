@@ -1,4 +1,5 @@
 <!doctype html>
+<!-- Galvin Voice Discovery vNext2.5 - Hybrid recording limits - 2026-09-14 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -454,6 +455,37 @@ const LEAP_SOLFEGE =
 
 
 /*
+ * HYBRID RECORDING LIMITS
+ *
+ * Students always control when a recording begins and may tap Stop as soon
+ * as they finish, falter, or become uncomfortable. These task-specific
+ * maximums are only a safety net if a student forgets to tap Stop.
+ */
+const RECORDING_LIMITS = {
+  speech:10,
+  happyBirthday:25,
+  scaleEcho:10,
+  sustainedLoo:7,
+  leapEcho:8,
+  memoryEcho:[8,9,10,11,12]
+};
+
+function memoryRecordingLimit(levelIndex){
+  return RECORDING_LIMITS.memoryEcho[
+    Math.max(0, Math.min(levelIndex, RECORDING_LIMITS.memoryEcho.length - 1))
+  ];
+}
+
+function recordingControls(message){
+  return (
+    '<div class="recording"><span class="dot"></span>' + message + '</div>' +
+    '<div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>' +
+    '<p class="small muted">Tap Stop when you finish. If you forget, the recording will stop automatically.</p>'
+  );
+}
+
+
+/*
  * These are STARTING PITCHES for movable-Do patterns.
  * Students never need to see these note names.
  */
@@ -684,13 +716,16 @@ let state = {
   noComfortablePattern:false,
 
   recordingRetries:{},
+  memoryHistory:[],
+  octaveEvidence:[],
+  routeOctaveShift:0,
   _pendingReview:null
 };
 
 let pending = {};
 let reqSeq = 0;
 
-const TOTAL_STEPS = 8;
+const TOTAL_STEPS = 9;
 
 
 /********************************************************************
@@ -1894,14 +1929,464 @@ async function countdown(){
 }
 
 
+
+/********************************************************************
+ * CLIENT-SIDE ACOUSTIC ANALYSIS
+ *
+ * Purpose: help the assessment interpret monophonic singing more
+ * intelligently without making any student-facing grade/judgment.
+ * Low-confidence results are saved for teacher review instead of
+ * being treated as certain.
+ ********************************************************************/
+
+const PITCH_ANALYZER_VERSION = 'ClientPitch_v1.0';
+
+function medianNumber(values){
+  if (!values || !values.length) return null;
+  const a = values.filter(Number.isFinite).slice().sort(function(x,y){return x-y;});
+  if (!a.length) return null;
+  const m = Math.floor(a.length/2);
+  return a.length % 2 ? a[m] : (a[m-1] + a[m]) / 2;
+}
+
+function percentileNumber(values, p){
+  if (!values || !values.length) return null;
+  const a = values.filter(Number.isFinite).slice().sort(function(x,y){return x-y;});
+  if (!a.length) return null;
+  const x = Math.max(0, Math.min(1, p)) * (a.length - 1);
+  const lo = Math.floor(x), hi = Math.ceil(x);
+  if (lo === hi) return a[lo];
+  return a[lo] + (a[hi]-a[lo]) * (x-lo);
+}
+
+function hzToMidi(hz){
+  return 69 + 12 * Math.log2(hz / 440);
+}
+
+function roundedPitchName(midi){
+  return Number.isFinite(midi) ? nameForMidi(Math.round(midi)) : '';
+}
+
+function downsampleMono(audioBuffer, targetRate){
+  const channels = audioBuffer.numberOfChannels;
+  const length = audioBuffer.length;
+  const sourceRate = audioBuffer.sampleRate;
+  const mono = new Float32Array(length);
+
+  for (let c=0;c<channels;c++){
+    const data = audioBuffer.getChannelData(c);
+    for (let i=0;i<length;i++) mono[i] += data[i] / channels;
+  }
+
+  if (sourceRate <= targetRate * 1.15){
+    return {data:mono, sampleRate:sourceRate};
+  }
+
+  const factor = Math.max(1, Math.floor(sourceRate / targetRate));
+  const outLength = Math.floor(mono.length / factor);
+  const out = new Float32Array(outLength);
+  for (let i=0;i<outLength;i++){
+    let sum=0;
+    const base=i*factor;
+    for (let j=0;j<factor;j++) sum += mono[base+j];
+    out[i]=sum/factor;
+  }
+  return {data:out, sampleRate:sourceRate/factor};
+}
+
+function frameRms(data, start, length){
+  let sum=0;
+  const end=Math.min(data.length,start+length);
+  for(let i=start;i<end;i++) sum += data[i]*data[i];
+  return Math.sqrt(sum/Math.max(1,end-start));
+}
+
+function yinPitchFrame(data, start, frameSize, sampleRate){
+  const minHz=75;
+  const maxHz=750;
+  const minTau=Math.max(2,Math.floor(sampleRate/maxHz));
+  const maxTau=Math.min(Math.floor(sampleRate/minHz),Math.floor(frameSize/2));
+  const available=Math.min(frameSize,data.length-start);
+  if (available < maxTau + 128) return null;
+
+  const rms=frameRms(data,start,available);
+  if (rms < 0.006) return null;
+
+  const diff=new Float32Array(maxTau+1);
+  for(let tau=minTau;tau<=maxTau;tau++){
+    let sum=0;
+    const n=available-tau;
+    for(let i=0;i<n;i++){
+      const d=data[start+i]-data[start+i+tau];
+      sum += d*d;
+    }
+    diff[tau]=sum/Math.max(1,n);
+  }
+
+  const cmnd=new Float32Array(maxTau+1);
+  cmnd[0]=1;
+  let running=0;
+  for(let tau=1;tau<=maxTau;tau++){
+    running += diff[tau];
+    cmnd[tau] = running > 0 ? diff[tau] * tau / running : 1;
+  }
+
+  let tau=-1;
+  const threshold=0.18;
+  for(let t=minTau;t<=maxTau;t++){
+    if (cmnd[t] < threshold){
+      while(t+1<=maxTau && cmnd[t+1] < cmnd[t]) t++;
+      tau=t;
+      break;
+    }
+  }
+
+  if (tau < 0){
+    let best=1;
+    let bestTau=-1;
+    for(let t=minTau;t<=maxTau;t++){
+      if (cmnd[t] < best){best=cmnd[t];bestTau=t;}
+    }
+    if (bestTau < 0 || best > 0.34) return null;
+    tau=bestTau;
+  }
+
+  let betterTau=tau;
+  if (tau>minTau && tau<maxTau){
+    const s0=cmnd[tau-1], s1=cmnd[tau], s2=cmnd[tau+1];
+    const denom=(2*s1-s2-s0);
+    if (Math.abs(denom)>1e-9){
+      betterTau = tau + 0.5*(s2-s0)/denom;
+    }
+  }
+
+  const hz=sampleRate/betterTau;
+  if (!(hz>=minHz && hz<=maxHz)) return null;
+  return {hz:hz, clarity:Math.max(0,Math.min(1,1-cmnd[tau])), rms:rms};
+}
+
+function medianSmoothFrames(frames){
+  if (frames.length < 3) return frames.slice();
+  return frames.map(function(frame,i){
+    const vals=[];
+    for(let j=Math.max(0,i-1);j<=Math.min(frames.length-1,i+1);j++) vals.push(frames[j].midi);
+    return Object.assign({},frame,{midi:medianNumber(vals)});
+  });
+}
+
+async function extractPitchFrames(blob){
+  const ctx = state.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+  const arrayBuffer = await blob.arrayBuffer();
+  const decoded = await ctx.decodeAudioData(arrayBuffer.slice(0));
+  const ds=downsampleMono(decoded,12000);
+  const data=ds.data;
+  const sr=ds.sampleRate;
+  const frameSize=768;
+  const hop=512;
+  const frames=[];
+
+  for(let start=0; start+frameSize<data.length; start+=hop){
+    const p=yinPitchFrame(data,start,frameSize,sr);
+    if (!p) continue;
+    const midi=hzToMidi(p.hz);
+    if (midi < 38 || midi > 84) continue;
+    frames.push({
+      time:start/sr,
+      midi:midi,
+      clarity:p.clarity,
+      rms:p.rms
+    });
+  }
+  return medianSmoothFrames(frames);
+}
+
+function dtwSequence(observed, expected){
+  const n=expected.length, m=observed.length;
+  if (!n || !m) return null;
+  const INF=1e12;
+  const dp=Array.from({length:n},function(){return new Float64Array(m).fill(INF);});
+  const back=Array.from({length:n},function(){return new Int8Array(m);});
+  const cost=function(i,j){return Math.min(8,Math.abs(observed[j]-expected[i]));};
+
+  dp[0][0]=cost(0,0);
+  for(let j=1;j<m;j++){
+    dp[0][j]=dp[0][j-1]+cost(0,j);
+    back[0][j]=1; // stay on same expected note
+  }
+  for(let i=1;i<n;i++){
+    dp[i][0]=dp[i-1][0]+2.75+cost(i,0);
+    back[i][0]=2; // expected note advanced without new observation
+  }
+
+  for(let i=1;i<n;i++){
+    for(let j=1;j<m;j++){
+      const c=cost(i,j);
+      const stay=dp[i][j-1]+c;
+      const advance=dp[i-1][j-1]+c;
+      const skip=dp[i-1][j]+2.75+c*0.35;
+      if (advance<=stay && advance<=skip){dp[i][j]=advance;back[i][j]=0;}
+      else if (stay<=skip){dp[i][j]=stay;back[i][j]=1;}
+      else {dp[i][j]=skip;back[i][j]=2;}
+    }
+  }
+
+  const groups=Array.from({length:n},function(){return [];});
+  let i=n-1,j=m-1;
+  while(i>=0 && j>=0){
+    groups[i].push(observed[j]);
+    if (i===0 && j===0) break;
+    const b=back[i][j];
+    if (b===0){i--;j--;}
+    else if (b===1){j--;}
+    else {i--;}
+    if (i<0 || j<0) break;
+  }
+  groups.forEach(function(g){g.reverse();});
+  const medians=groups.map(function(g){return medianNumber(g);});
+  const errors=medians.map(function(x,k){return Number.isFinite(x)?Math.abs(x-expected[k]):null;});
+  const validErrors=errors.filter(Number.isFinite);
+  const meanError=validErrors.length?validErrors.reduce(function(a,b){return a+b;},0)/validErrors.length:99;
+  const pitchMatch=validErrors.length?100*validErrors.filter(function(x){return x<=0.85;}).length/n:0;
+  const coverage=100*validErrors.length/n;
+
+  let contourGood=0, intervalGood=0, transitions=0;
+  for(let k=1;k<n;k++){
+    if (!Number.isFinite(medians[k-1]) || !Number.isFinite(medians[k])) continue;
+    const obsInt=medians[k]-medians[k-1];
+    const expInt=expected[k]-expected[k-1];
+    const obsDir=Math.abs(obsInt)<0.7?0:(obsInt>0?1:-1);
+    const expDir=Math.abs(expInt)<0.7?0:(expInt>0?1:-1);
+    if (obsDir===expDir) contourGood++;
+    if (Math.abs(obsInt-expInt)<=1.35) intervalGood++;
+    transitions++;
+  }
+  return {
+    medians:medians,
+    meanError:meanError,
+    pitchMatchPct:pitchMatch,
+    coveragePct:coverage,
+    contourMatchPct:transitions?100*contourGood/transitions:0,
+    intervalMatchPct:transitions?100*intervalGood/transitions:0
+  };
+}
+
+function sequenceAnalysisFromFrames(frames, expectedMidis){
+  const obs=frames.map(function(f){return f.midi;});
+
+  // First answer the specific octave question: target octave, one octave down,
+  // or one octave up.
+  const octaveCandidates=[-12,0,12].map(function(shift){
+    const target=expectedMidis.map(function(x){return x+shift;});
+    return {shift:shift,result:dtwSequence(obs,target)};
+  });
+  octaveCandidates.sort(function(a,b){return a.result.meanError-b.result.meanError;});
+  const bestOctave=octaveCandidates[0];
+  const zero=octaveCandidates.find(function(x){return x.shift===0;});
+  let octaveShift=0;
+  const octaveStructureOk = expectedMidis.length===1
+    ? bestOctave.result.pitchMatchPct>=70
+    : bestOctave.result.contourMatchPct>=60;
+  if (
+    bestOctave.shift!==0 &&
+    bestOctave.result.pitchMatchPct>=60 &&
+    octaveStructureOk &&
+    bestOctave.result.meanError+0.75 < zero.result.meanError
+  ) octaveShift=bestOctave.shift;
+  const octaveAware=octaveShift===0?zero:bestOctave;
+
+  // Separately find the best overall transposition. This lets melodic-memory
+  // scoring recognize a correctly remembered contour even when a student
+  // starts on a different pitch that is not exactly an octave away.
+  const freeCandidates=[];
+  for(let shift=-12;shift<=12;shift++){
+    const target=expectedMidis.map(function(x){return x+shift;});
+    freeCandidates.push({shift:shift,result:dtwSequence(obs,target)});
+  }
+  freeCandidates.sort(function(a,b){
+    if (a.result.meanError!==b.result.meanError) return a.result.meanError-b.result.meanError;
+    return Math.abs(a.shift)-Math.abs(b.shift);
+  });
+  const freeBest=freeCandidates[0];
+
+  return {
+    octaveShift:octaveShift,
+    pitchMatchPct:octaveAware.result.pitchMatchPct,
+    absolutePitchMatchPct:zero.result.pitchMatchPct,
+    relativePitchMatchPct:freeBest.result.pitchMatchPct,
+    contourMatchPct:freeBest.result.contourMatchPct,
+    intervalMatchPct:freeBest.result.intervalMatchPct,
+    coveragePct:freeBest.result.coveragePct,
+    meanErrorSemitones:octaveAware.result.meanError,
+    noteMedians:freeBest.result.medians,
+    freeTranspositionSemitones:freeBest.shift
+  };
+}
+
+async function analyzeRecording(review){
+  const base={
+    analyzerVersion:PITCH_ANALYZER_VERSION,
+    expectedPitchCount:0,
+    pitchMatchPct:'',
+    contourMatchPct:'',
+    tonalDriftCents:'',
+    confidence:0,
+    needsReview:false,
+    reviewReason:'',
+    detectedLow:'', detectedHigh:'', medianPitch:'',
+    stabilityNotes:'', analysisNotes:'', referenceStart:''
+  };
+
+  try{
+    const frames=await extractPitchFrames(review.recording.blob);
+    const midis=frames.map(function(f){return f.midi;});
+    const avgClarity=frames.length?frames.reduce(function(a,f){return a+f.clarity;},0)/frames.length:0;
+    const voicedSpan=frames.length>1?frames[frames.length-1].time-frames[0].time:0;
+
+    base.detectedLow=roundedPitchName(percentileNumber(midis,0.05));
+    base.detectedHigh=roundedPitchName(percentileNumber(midis,0.95));
+    base.medianPitch=roundedPitchName(medianNumber(midis));
+
+    let confidence=Math.min(100, Math.round(
+      35*Math.min(1,frames.length/25) +
+      35*Math.min(1,avgClarity/0.72) +
+      30*Math.min(1,voicedSpan/2.0)
+    ));
+
+    if (frames.length<8){
+      base.confidence=Math.min(confidence,30);
+      base.needsReview=true;
+      base.reviewReason='Not enough clear pitched singing was detected.';
+      base.stabilityNotes='Very little reliable voiced pitch was detected.';
+      base.analysisNotes='Audio saved; acoustic result is low confidence and should not be used automatically.';
+      return base;
+    }
+
+    const expected=(review.meta && review.meta.expectedMidi)
+      ? String(review.meta.expectedMidi).split(',').map(Number).filter(Number.isFinite)
+      : [];
+
+    base.expectedPitchCount=expected.length;
+    base.referenceStart=review.meta && review.meta.tonic ? review.meta.tonic : '';
+
+    if (expected.length){
+      const seq=sequenceAnalysisFromFrames(frames,expected);
+      base.sequence=seq;
+      base.pitchMatchPct=Math.round(seq.pitchMatchPct*10)/10;
+      base.contourMatchPct=expected.length>1?Math.round(seq.contourMatchPct*10)/10:'';
+      base.confidence=Math.max(0,Math.min(100,Math.round((confidence*0.65)+(seq.coveragePct*0.35))));
+      const octaveText=seq.octaveShift===12?'one octave higher':(seq.octaveShift===-12?'one octave lower':'target octave');
+
+      if (expected.length===1){
+        const center=medianNumber(midis);
+        const cents=midis.map(function(x){return (x-center)*100;});
+        const meanCents=cents.reduce(function(a,b){return a+b;},0)/cents.length;
+        const variance=cents.reduce(function(a,b){const d=b-meanCents;return a+d*d;},0)/cents.length;
+        const sdCents=Math.sqrt(variance);
+        const third=Math.max(1,Math.floor(midis.length/3));
+        const early=medianNumber(midis.slice(0,third));
+        const late=medianNumber(midis.slice(-third));
+        const drift=Number.isFinite(early)&&Number.isFinite(late)?Math.round((late-early)*100):'';
+        base.tonalDriftCents=drift;
+        base.stabilityNotes='Detected in ' + octaveText + '; pitch stability about ' + Math.round(sdCents) + ' cents SD' + (drift!==''?'; drift '+(drift>=0?'+':'')+drift+' cents':'') + '.';
+      } else {
+        base.stabilityNotes='Detected in ' + octaveText + '; interval match ' + Math.round(seq.intervalMatchPct) + '%; coverage ' + Math.round(seq.coveragePct) + '%.';
+      }
+
+      base.analysisNotes='Absolute pitch match ' + Math.round(seq.absolutePitchMatchPct) + '%. Relative pitch match ' + Math.round(seq.relativePitchMatchPct) + '%. Free transposition estimate ' + (seq.freeTranspositionSemitones>=0?'+':'') + seq.freeTranspositionSemitones + ' semitones.';
+      if (base.confidence<45){
+        base.needsReview=true;
+        base.reviewReason='Low-confidence pitch analysis.';
+      }
+      return base;
+    }
+
+    // Natural singing / no fixed reference: capture center and observed range only.
+    base.confidence=confidence;
+    base.stabilityNotes='Natural singing sample; no target pitch was imposed.';
+    base.analysisNotes='Observed pitch center and range only. No automated tone-quality judgment is made.';
+    if (confidence<40){
+      base.needsReview=true;
+      base.reviewReason='Low-confidence natural-singing pitch estimate.';
+    }
+    return base;
+  } catch(err){
+    base.needsReview=true;
+    base.reviewReason='Client acoustic analysis was unavailable for this recording.';
+    base.analysisNotes='Recording was saved normally; analysis can be reviewed later.';
+    return base;
+  }
+}
+
+function analysisPayloadForServer(review){
+  const a=review.analysis || {};
+  return {
+    confidence:a.confidence,
+    expectedPitchCount:a.expectedPitchCount,
+    pitchMatchPct:a.pitchMatchPct,
+    contourMatchPct:a.contourMatchPct,
+    tonalDriftCents:a.tonalDriftCents,
+    needsReview:a.needsReview,
+    reviewReason:a.reviewReason,
+    detectedLow:a.detectedLow,
+    detectedHigh:a.detectedHigh,
+    medianPitch:a.medianPitch,
+    stabilityNotes:a.stabilityNotes,
+    analysisNotes:a.analysisNotes,
+    referenceStart:a.referenceStart
+  };
+}
+
+function confidentOctaveShift(analysis){
+  if (!analysis || !analysis.sequence) return 0;
+  const s=analysis.sequence;
+  const singlePitch=Number(analysis.expectedPitchCount||0)===1;
+  if (
+    analysis.confidence>=55 &&
+    Math.abs(s.octaveShift)===12 &&
+    (singlePitch ? s.pitchMatchPct>=70 : (s.contourMatchPct>=65 && s.intervalMatchPct>=55))
+  ) return s.octaveShift;
+  return 0;
+}
+
+function registerOctaveEvidence(analysis){
+  const shift=confidentOctaveShift(analysis);
+  if (!shift) return;
+  state.octaveEvidence.push(shift);
+  if (state.octaveEvidence.length>5) state.octaveEvidence.shift();
+  const recent=state.octaveEvidence.filter(function(x){return x===shift;}).length;
+  if (state.routeOctaveShift===0 && recent>=2){
+    state.routeOctaveShift=shift;
+  }
+}
+
+function reviewHint(review){
+  const a=review.analysis;
+  if (!a) return '';
+  if (a.reviewReason && a.confidence<35){
+    return '<div class="status warn">I may not have heard enough clear singing. You can try once more, or use this recording if it represents what happened.</div>';
+  }
+  const shift=confidentOctaveShift(a);
+  if (shift){
+    return '<div class="status ok">Nice — you followed the pattern in a different octave. If you want, hear it again and try starting in the same pitch area as the example.</div>';
+  }
+  return '';
+}
+
 /********************************************************************
  * RECORDING REVIEW
  * Every saved sample uses manual Start/Stop and one optional re-record.
  * Nothing is uploaded until the student chooses “Use this recording.”
  ********************************************************************/
 
-function queueRecordingReview(config){
+async function queueRecordingReview(config){
   state._pendingReview = config;
+  const area=document.getElementById(config.areaId);
+  if (area) area.innerHTML='<div class="status warn">Recording captured ✓ Checking it…</div>';
+  schedulePageTranslation();
+
+  if (['happy','pattern','sustain','leap','memory'].includes(config.kind)){
+    config.analysis = await analyzeRecording(config);
+  }
   renderPendingReview();
 }
 
@@ -1914,6 +2399,7 @@ function renderPendingReview(){
   const usedRetries = state.recordingRetries[review.key] || 0;
   area.innerHTML = `
     <div class="status ok"><b>Recording captured ✓</b></div>
+    ${reviewHint(review)}
     <p>You do not need to listen to it. Use this recording, or try it one more time if you want.</p>
     <div class="btnrow">
       <button class="primary bigbtn" onclick="usePendingRecording()">Use this recording</button>
@@ -1921,6 +2407,20 @@ function renderPendingReview(){
     </div>
   `;
   schedulePageTranslation();
+}
+
+async function saveReviewAnalysis(review){
+  if (!review.analysis) return;
+  try{
+    await api('analysis',{
+      submissionCode:state.submissionCode,
+      exerciseId:review.exerciseId,
+      attempt:review.attempt || 1,
+      analysis:analysisPayloadForServer(review)
+    });
+  } catch(err){
+    console.warn('Analysis metadata could not be saved:',err);
+  }
 }
 
 async function usePendingRecording(){
@@ -1939,6 +2439,9 @@ async function usePendingRecording(){
       review.attempt || 1
     );
 
+    await saveReviewAnalysis(review);
+    if (review.analysis) registerOctaveEvidence(review.analysis);
+
     state._pendingReview = null;
 
     if (review.kind === 'speech'){
@@ -1946,11 +2449,17 @@ async function usePendingRecording(){
     } else if (review.kind === 'happy'){
       area.innerHTML = '<div class="status ok">Got it! ✓ Nice work.</div><p class="muted">Now we’ll try a few short patterns.</p><div class="btnrow"><button class="primary" onclick="beginPatterns()">Continue</button></div>';
     } else if (review.kind === 'pattern'){
+      // Keep the acoustic result with this controlled pattern so the routing
+      // summary can distinguish range/comfort from octave matching.
+      state._currentPattern.analysis = review.analysis || null;
       area.innerHTML = comfortButtons(review.exerciseId, review.attempt || 1);
     } else if (review.kind === 'sustain'){
       area.innerHTML = '<div class="status ok">Perfect — got it! ✓</div><div class="btnrow"><button class="primary" onclick="showLeap()">Continue</button></div>';
     } else if (review.kind === 'leap'){
-      area.innerHTML = '<div class="status ok">Nice job! ✓ Singing part finished.</div><div class="btnrow"><button class="primary" onclick="showFinish()">Continue</button></div>';
+      area.innerHTML = '<div class="status ok">Nice job! ✓</div><div class="btnrow"><button class="primary" onclick="beginMemoryEcho()">Continue</button></div>';
+    } else if (review.kind === 'memory'){
+      completeMemoryLevel(review);
+      return;
     }
 
     schedulePageTranslation();
@@ -1966,6 +2475,10 @@ async function retryPendingRecording(){
   const usedRetries = state.recordingRetries[review.key] || 0;
   if (usedRetries >= 1) return;
 
+  // A discarded take is not saved, but a clear repeated octave choice can
+  // still help the adaptive route recognize a consistent octave tendency.
+  if (review.analysis) registerOctaveEvidence(review.analysis);
+
   state.recordingRetries[review.key] = usedRetries + 1;
   state._pendingReview = null;
 
@@ -1979,6 +2492,8 @@ async function retryPendingRecording(){
     await listenSustain();
   } else if (review.kind === 'leap'){
     await listenLeap();
+  } else if (review.kind === 'memory'){
+    await listenMemoryLevel();
   }
 }
 
@@ -2042,11 +2557,11 @@ async function recordSpeech(){
   disableButtons();
   await countdown();
   const msg = document.getElementById('taskMsg');
-  msg.innerHTML = '<div class="recording"><span class="dot"></span>Recording… speak normally.</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  msg.innerHTML = recordingControls('Recording… speak normally.');
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(20, true);
+    const recording = await captureAudio(RECORDING_LIMITS.speech, true);
     queueRecordingReview({
       kind:'speech', key:'speech', areaId:'taskMsg',
       exerciseId:'SPEECH_20_TO_15', exerciseType:'speech',
@@ -2084,14 +2599,9 @@ function showHappyBirthday(){
         Now let’s hear your natural singing voice.
       </h2>
 
-      ${languageHelp('happy',{NAME:firstName})}
-
       <p>
-        Sing just:
-      </p>
-
-      <p style="font-size:26px; font-weight:800;">
-        “Happy birthday dear ${esc(firstName)}”
+        Sing the <b>entire “Happy Birthday” song from beginning to end</b>.
+        When you get to the name, sing <b>your own first name</b> (${esc(firstName)}).
       </p>
 
       <p>
@@ -2100,7 +2610,7 @@ function showHappyBirthday(){
       </p>
 
       <p class="muted">
-        Keep it easy and comfortable. No need to sing extra high or low.
+        Use your normal, comfortable singing voice. Do not try to make your voice higher or lower than it wants to be.
       </p>
 
       <div class="btnrow">
@@ -2126,14 +2636,14 @@ async function recordHappy(){
   disableButtons();
   await countdown();
   const msg = document.getElementById('taskMsg');
-  msg.innerHTML = '<div class="recording"><span class="dot"></span>Recording… sing the whole phrase.</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  msg.innerHTML = recordingControls('Recording… sing the whole song.');
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(20, true);
+    const recording = await captureAudio(RECORDING_LIMITS.happyBirthday, true);
     queueRecordingReview({
       kind:'happy', key:'happy', areaId:'taskMsg',
-      exerciseId:'HAPPY_BIRTHDAY_DEAR_NAME', exerciseType:'natural_song_phrase',
+      exerciseId:'HAPPY_BIRTHDAY_FULL', exerciseType:'natural_song_full',
       recording:recording, meta:{}, attempt:1
     });
   } catch(err){
@@ -2565,6 +3075,8 @@ function beginPatterns(){
 
 
   state.noComfortablePattern = false;
+  state.octaveEvidence = [];
+  state.routeOctaveShift = 0;
 
   route = {
     phase:'start',
@@ -2581,41 +3093,34 @@ function beginPatterns(){
 }
 
 
+function patternActualStartMidi(startName){
+  return NOTE_TO_MIDI[startName] + (state.routeOctaveShift || 0);
+}
+
+function patternPlayable(startName){
+  const midi=patternActualStartMidi(startName);
+  return Number.isFinite(midi) && midi>=43 && (midi+7)<=79;
+}
+
 function scaleMeta(startName){
 
-  const start =
-    NOTE_TO_MIDI[startName];
-
+  const start = patternActualStartMidi(startName);
 
   const midis =
     SCALE_INTERVALS.map(
       function(interval){
-
         return start + interval;
       }
     );
 
-
   return {
     startName:startName,
     startMidi:start,
-
-    expectedMidi:
-      midis.join(','),
-
-    expectedPitches:
-      midis
-        .map(nameForMidi)
-        .join(' '),
-
-    solfege:
-      SCALE_SOLFEGE.join('–'),
-
-    tonic:
-      startName,
-
-    tempoBpm:
-      TEMPO
+    expectedMidi:midis.join(','),
+    expectedPitches:midis.map(nameForMidi).join(' '),
+    solfege:SCALE_SOLFEGE.join('–'),
+    tonic:nameForMidi(start),
+    tempoBpm:TEMPO
   };
 }
 
@@ -2625,6 +3130,11 @@ function showPattern(
   label,
   attempt
 ){
+
+  if (!patternPlayable(startName)){
+    finishPatterns();
+    return;
+  }
 
   setCurrentScreen(function(){ showPattern(startName, label, attempt); });
 
@@ -2763,13 +3273,13 @@ async function recordCurrentPattern(){
   disableButtons();
   await countdown();
   const area = document.getElementById('patternAction');
-  area.innerHTML = '<div class="recording"><span class="dot"></span>Recording… sing the pattern on “loo.”</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  area.innerHTML = recordingControls('Recording… sing the pattern on “loo.”');
   schedulePageTranslation();
 
   const pattern = state._currentPattern;
   try{
-    const recording = await captureAudio(20, true);
-    const exerciseId = 'SCALE_' + pattern.startName.replace('b','FLAT').replace('#','SHARP');
+    const recording = await captureAudio(RECORDING_LIMITS.scaleEcho, true);
+    const exerciseId = 'SCALE_' + pattern.meta.tonic.replace('b','FLAT').replace('#','SHARP');
     queueRecordingReview({
       kind:'pattern', key:'pattern:' + exerciseId, areaId:'patternAction',
       exerciseId:exerciseId, exerciseType:'scale_echo',
@@ -2922,11 +3432,21 @@ async function patternComfort(
     state._currentPattern.startName;
 
 
+  const currentMeta = state._currentPattern.meta;
+  const currentAnalysis = state._currentPattern.analysis || null;
+
   state.patternHistory.push(
     {
+      exercise:'CONTROLLED_SCALE',
       start:start,
+      actualStart:nameForMidi(currentMeta.startMidi),
+      actualStartMidi:currentMeta.startMidi,
       comfort:comfort,
-      attempt:attempt
+      attempt:attempt,
+      octaveShift:currentAnalysis && currentAnalysis.sequence ? currentAnalysis.sequence.octaveShift : 0,
+      pitchMatchPct:currentAnalysis ? currentAnalysis.pitchMatchPct : '',
+      contourMatchPct:currentAnalysis ? currentAnalysis.contourMatchPct : '',
+      analysisConfidence:currentAnalysis ? currentAnalysis.confidence : ''
     }
   );
 
@@ -3142,7 +3662,7 @@ function advanceAdaptiveQueue(){
   while (route.queue.length){
     const next = route.queue.shift();
 
-    if (!tested(next)){
+    if (!tested(next) && patternPlayable(next)){
       showPattern(next, 'Listen and echo');
       return;
     }
@@ -3155,7 +3675,7 @@ function advanceAdaptiveQueue(){
 function beginUpperExploration_(fromStart){
   route.phase = 'upperExplore';
 
-  const anchor = fromStart || bestComfortableStartName_() || 'G3';
+  const anchor = fromStart || (state.patternHistory.filter(function(x){return x.comfort==='Easy'||x.comfort==='Okay';}).slice(-1)[0]||{}).start || 'G3';
   const anchorMidi = NOTE_TO_MIDI[anchor];
 
   route.queue = UPPER_SEQUENCE.filter(function(name){
@@ -3250,54 +3770,28 @@ function showNoComfortablePattern_(){
  * COMFORTABLE SUSTAINED "OO"
  ********************************************************************/
 
-function comfortableStarts_(preferredComfort){
+function comfortableActualMidis_(preferredComfort){
   return state.patternHistory
     .filter(function(item){
-      if (!item.start){
-        return false;
-      }
-
-      if (preferredComfort){
-        return item.comfort === preferredComfort;
-      }
-
+      if (!Number.isFinite(Number(item.actualStartMidi))) return false;
+      if (preferredComfort) return item.comfort === preferredComfort;
       return item.comfort === 'Easy' || item.comfort === 'Okay';
     })
-    .map(function(item){
-      return item.start;
-    })
-    .filter(function(name, index, array){
-      return NOTE_TO_MIDI[name] !== undefined && array.indexOf(name) === index;
-    })
-    .sort(function(a,b){
-      return NOTE_TO_MIDI[a] - NOTE_TO_MIDI[b];
-    });
+    .map(function(item){return Number(item.actualStartMidi);})
+    .filter(function(value,index,array){return array.indexOf(value)===index;})
+    .sort(function(a,b){return a-b;});
 }
-
 
 function bestComfortableStartName_(){
-  let starts = comfortableStarts_('Easy');
-
-  if (!starts.length){
-    starts = comfortableStarts_('Okay');
-  }
-
-  if (!starts.length){
-    return '';
-  }
-
-  return starts[
-    Math.floor((starts.length - 1) / 2)
-  ];
+  const midi=bestComfortableStart();
+  return Number.isFinite(midi)?nameForMidi(midi):'';
 }
 
-
 function bestComfortableStart(){
-  const name = bestComfortableStartName_();
-
-  return name
-    ? NOTE_TO_MIDI[name]
-    : null;
+  let values=comfortableActualMidis_('Easy');
+  if (!values.length) values=comfortableActualMidis_('Okay');
+  if (!values.length) return null;
+  return values[Math.floor((values.length-1)/2)];
 }
 
 
@@ -3418,11 +3912,11 @@ async function recordSustain(){
   disableButtons();
   await countdown();
   const area = document.getElementById('sustainAction');
-  area.innerHTML = '<div class="recording"><span class="dot"></span>Recording… hold “loo” comfortably.</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  area.innerHTML = recordingControls('Recording… hold “loo” comfortably.');
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(20, true);
+    const recording = await captureAudio(RECORDING_LIMITS.sustainedLoo, true);
     const pitchName = nameForMidi(state._sustainMidi);
     queueRecordingReview({
       kind:'sustain', key:'sustain', areaId:'sustainAction',
@@ -3563,11 +4057,11 @@ async function recordLeap(){
   disableButtons();
   await countdown();
   const area = document.getElementById('leapAction');
-  area.innerHTML = '<div class="recording"><span class="dot"></span>Recording… sing the pattern on “loo.”</div><div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>';
+  area.innerHTML = recordingControls('Recording… sing the pattern on “loo.”');
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(20, true);
+    const recording = await captureAudio(RECORDING_LIMITS.leapEcho, true);
     const midis = LEAP_INTERVALS.map(function(interval){ return state._leapTonic + interval; });
     const tonicName = nameForMidi(state._leapTonic);
     queueRecordingReview({
@@ -3588,6 +4082,174 @@ async function recordLeap(){
 }
 
 
+
+/********************************************************************
+ * ADAPTIVE MELODIC-MEMORY ECHO
+ *
+ * A short ladder separates vocal-range information from aural memory.
+ * Every pattern stays inside a previously comfortable five-note area.
+ * Students complete at least two items and at most five.
+ ********************************************************************/
+
+const MEMORY_LEVELS = [
+  {id:'MEM1', intervals:[0,2,4], solfege:['Do','Re','Mi'], label:'3 notes'},
+  {id:'MEM2', intervals:[0,4,2,0], solfege:['Do','Mi','Re','Do'], label:'4 notes'},
+  {id:'MEM3', intervals:[0,2,5,4,2], solfege:['Do','Re','Fa','Mi','Re'], label:'5 notes'},
+  {id:'MEM4', intervals:[0,4,7,5,2,0], solfege:['Do','Mi','Sol','Fa','Re','Do'], label:'6 notes'},
+  {id:'MEM5', intervals:[0,2,5,4,7,5,2], solfege:['Do','Re','Fa','Mi','Sol','Fa','Re'], label:'7 notes'}
+];
+
+function beginMemoryEcho(){
+  const tonic=bestComfortableStart();
+  if (!Number.isFinite(tonic)){
+    showFinish();
+    return;
+  }
+  state.memoryHistory=[];
+  state._memoryTonic=tonic;
+  state._memoryLevelIndex=0;
+  showMemoryLevel();
+}
+
+function showMemoryLevel(){
+  setCurrentScreen(showMemoryLevel);
+  setProgress(8);
+  const level=MEMORY_LEVELS[state._memoryLevelIndex];
+  if (!level){showFinish();return;}
+
+  app().innerHTML=`
+    <div class="card">
+      <div class="stepTitle">Step 7 — Melody memory</div>
+      <h2>A few quick echo challenges!</h2>
+      <p>
+        You’ll hear a short melody <b>two times</b>. Listen first, remember it, then sing it back on <b>“loo.”</b>
+      </p>
+      <p class="muted">
+        The patterns may get a little longer. This is not a grade — it simply helps Mr. Zini understand how you hear and remember melodies.
+      </p>
+      <p class="cheer">Challenge ${state._memoryLevelIndex+1}</p>
+      <div id="memoryContour" class="contourWrap"></div>
+      <div class="btnrow">
+        <button class="primary bigbtn" onclick="listenMemoryLevel()">▶ Listen twice</button>
+      </div>
+      <div id="memoryAction"></div>
+    </div>`;
+
+  drawMemoryContour(level.intervals,level.solfege);
+}
+
+function drawMemoryContour(intervals,solfege){
+  // Reuse the same honest pitch-spacing contour used in the range patterns.
+  const old=document.getElementById('contour');
+  const holder=document.getElementById('memoryContour');
+  if (!holder) return;
+  holder.id='contour';
+  drawContour(intervals,solfege,-1);
+  holder.id='memoryContour';
+  if (old) old.id='contour';
+}
+
+async function listenMemoryLevel(){
+  disableButtons();
+  const level=MEMORY_LEVELS[state._memoryLevelIndex];
+  await playGenerated(state._memoryTonic,level.intervals,level.solfege);
+  await sleep(450);
+  await playGenerated(state._memoryTonic,level.intervals,level.solfege);
+  const area=document.getElementById('memoryAction');
+  area.innerHTML=`
+    <div class="status ok">Your turn!</div>
+    <p>Sing the melody back on <b>“loo.”</b></p>
+    <div class="btnrow"><button class="good bigbtn" onclick="recordMemoryLevel()">Start recording</button></div>`;
+  schedulePageTranslation();
+}
+
+async function recordMemoryLevel(){
+  disableButtons();
+  await countdown();
+  const area=document.getElementById('memoryAction');
+  area.innerHTML=recordingControls('Recording… sing the melody on “loo.”');
+  schedulePageTranslation();
+
+  const level=MEMORY_LEVELS[state._memoryLevelIndex];
+  const midis=level.intervals.map(function(x){return state._memoryTonic+x;});
+  const tonicName=nameForMidi(state._memoryTonic);
+  try{
+    const recording=await captureAudio(memoryRecordingLimit(state._memoryLevelIndex),true);
+    queueRecordingReview({
+      kind:'memory',
+      key:'memory:'+level.id,
+      areaId:'memoryAction',
+      exerciseId:level.id+'_'+tonicName.replace('#','SHARP').replace('b','FLAT'),
+      exerciseType:'melodic_memory_echo',
+      recording:recording,
+      attempt:1,
+      meta:{
+        expectedPitches:midis.map(nameForMidi).join(' '),
+        expectedMidi:midis.join(','),
+        solfege:level.solfege.join('–'),
+        tonic:tonicName,
+        tempoBpm:TEMPO
+      },
+      memoryLevel:state._memoryLevelIndex+1
+    });
+  } catch(err){
+    area.innerHTML='<div class="status bad">'+esc(err.message)+'</div>';
+    schedulePageTranslation();
+  }
+}
+
+function memoryScore(analysis){
+  if (!analysis || !analysis.sequence) return null;
+  const s=analysis.sequence;
+  return Math.round(
+    0.40*s.relativePitchMatchPct +
+    0.35*s.intervalMatchPct +
+    0.25*s.contourMatchPct
+  );
+}
+
+function completeMemoryLevel(review){
+  const area=document.getElementById('memoryAction');
+  const score=memoryScore(review.analysis);
+  const levelNum=review.memoryLevel || (state._memoryLevelIndex+1);
+  state.memoryHistory.push({
+    exercise:'MELODIC_MEMORY',
+    level:levelNum,
+    noteCount:(review.analysis && review.analysis.expectedPitchCount)||MEMORY_LEVELS[state._memoryLevelIndex].intervals.length,
+    memoryScore:score===null?'':score,
+    absolutePitchMatchPct:review.analysis && review.analysis.sequence ? Math.round(review.analysis.sequence.absolutePitchMatchPct) : '',
+    relativePitchMatchPct:review.analysis && review.analysis.sequence ? Math.round(review.analysis.sequence.relativePitchMatchPct) : '',
+    intervalMatchPct:review.analysis && review.analysis.sequence ? Math.round(review.analysis.sequence.intervalMatchPct) : '',
+    contourMatchPct:review.analysis && review.analysis.sequence ? Math.round(review.analysis.sequence.contourMatchPct) : '',
+    octaveShift:review.analysis && review.analysis.sequence ? review.analysis.sequence.octaveShift : 0,
+    analysisConfidence:review.analysis ? review.analysis.confidence : ''
+  });
+
+  state.patternHistory.push(state.memoryHistory[state.memoryHistory.length-1]);
+
+  const idx=state._memoryLevelIndex;
+  let continueOn=false;
+  if (idx===0){
+    continueOn=true; // Always collect a second sample for reliability.
+  } else if (score===null || !review.analysis || review.analysis.confidence<40){
+    continueOn=false;
+  } else if (idx===1){
+    continueOn=score>=55;
+  } else if (idx===2){
+    continueOn=score>=68;
+  } else if (idx===3){
+    continueOn=score>=82; // Level 5 is only for very secure echoing.
+  }
+
+  if (continueOn && idx+1<MEMORY_LEVELS.length){
+    state._memoryLevelIndex++;
+    area.innerHTML='<div class="status ok">Nice work! Let’s try one more.</div><div class="btnrow"><button class="primary" onclick="showMemoryLevel()">Continue</button></div>';
+  } else {
+    area.innerHTML='<div class="status ok">Great job — that gave us helpful information! ✓</div><div class="btnrow"><button class="primary" onclick="showFinish()">Continue</button></div>';
+  }
+  schedulePageTranslation();
+}
+
 /********************************************************************
  * FINAL COMFORT + SUBMISSION
  ********************************************************************/
@@ -3596,7 +4258,7 @@ function showFinish(){
 
   setCurrentScreen(showFinish);
 
-  setProgress(8);
+  setProgress(9);
 
 
   app().innerHTML = `
@@ -3730,7 +4392,7 @@ async function finalize(
         </p>
 
         <p class="muted">
-          Completing Voice Discovery may count as an assignment, but your voice itself was not graded or scored. You’re finished — nice work!
+          <b>Your Voice Discovery was submitted successfully.</b> Completing Voice Discovery may count as an assignment, but your voice itself was not graded or scored. You’re finished — nice work!
         </p>
 
       </div>
