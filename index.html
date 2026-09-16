@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.6 - Compact launch build - 2026-09-15 -->
+<!-- Galvin Voice Discovery vNext2.7 - Boundary range + classroom demo build - 2026-09-16 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -2946,16 +2946,25 @@ function drawContour(
  * CONTROLLED 5-NOTE PATTERNS
  ********************************************************************/
 
-const MAX_SCALE_PATTERNS = 7;
+const MAX_SCALE_PATTERNS = 9;
 
-const LOWER_SEQUENCE = ['G3','F3','D3','Bb2','A2','G2'];
-const UPPER_SEQUENCE = ['G3','A3','Bb3','C4','D4','F4','G4','A4','Bb4','C5','D5'];
+/*
+ * Ordered pattern starting pitches used by the adaptive range search.
+ * The assessment does NOT force every singer through this list. It stops
+ * once it has a comfortable anchor plus useful lower/upper boundary evidence,
+ * or when the safety cap is reached.
+ */
+const RANGE_STARTS = [
+  'G2','A2','Bb2','D3','F3','G3','A3','Bb3',
+  'C4','D4','F4','G4','A4','Bb4','C5','D5'
+];
 
 let route = {
   phase:'start',
-  queue:[],
-  lastTooHighStart:'',
-  lastTooLowStart:''
+  anchor:'',
+  lowerBoundaryStart:'',
+  upperBoundaryStart:'',
+  summaryAdded:false
 };
 
 
@@ -2972,9 +2981,10 @@ function beginPatterns(){
 
   route = {
     phase:'start',
-    queue:[],
-    lastTooHighStart:'',
-    lastTooLowStart:''
+    anchor:'',
+    lowerBoundaryStart:'',
+    upperBoundaryStart:'',
+    summaryAdded:false
   };
 
 
@@ -3063,7 +3073,7 @@ function showPattern(
       </h2>
 
       <p class="muted">
-        Sing comfortably. If it feels too high or too low, stop — that helps us find your range.
+        Sing comfortably. If it feels too high or too low, stop — that helps us find your low and high boundaries.
       </p>
 
       <div
@@ -3323,6 +3333,11 @@ async function patternComfort(
       octaveShift:currentAnalysis && currentAnalysis.sequence ? currentAnalysis.sequence.octaveShift : 0,
       pitchMatchPct:currentAnalysis ? currentAnalysis.pitchMatchPct : '',
       contourMatchPct:currentAnalysis ? currentAnalysis.contourMatchPct : '',
+      intervalMatchPct:currentAnalysis && currentAnalysis.sequence ? currentAnalysis.sequence.intervalMatchPct : '',
+      coveragePct:currentAnalysis && currentAnalysis.sequence ? currentAnalysis.sequence.coveragePct : '',
+      detectedLow:currentAnalysis ? currentAnalysis.detectedLow : '',
+      detectedHigh:currentAnalysis ? currentAnalysis.detectedHigh : '',
+      medianPitch:currentAnalysis ? currentAnalysis.medianPitch : '',
       analysisConfidence:currentAnalysis ? currentAnalysis.confidence : ''
     }
   );
@@ -3350,17 +3365,6 @@ function tested(startName){
 }
 
 
-/********************************************************************
- * ADAPTIVE ROUTING — vNEXT
- *
- * Goals:
- * - Start in a safer middle/lower neighborhood at G3 -> D4.
- * - Never let a difficult pattern end the assessment.
- * - Student reports Easy / Okay / Too high / Too low.
- * - Find at least one comfortable five-note window when possible.
- * - Stop after a useful neighborhood/boundary picture, max 7 patterns.
- ********************************************************************/
-
 function uniquePatternCount(){
   const seen = {};
 
@@ -3381,229 +3385,279 @@ function comfortablePatternCount(){
 }
 
 
-function nextPattern(
-  start,
-  comfort
-){
-
-  if (comfort === 'Too high'){
-    route.lastTooHighStart = start;
-  }
-
-  if (comfort === 'Too low'){
-    route.lastTooLowStart = start;
-  }
-
-  if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
-    finishPatterns();
-    return;
-  }
-
-  /* First probe: G3 -> D4 */
-  if (route.phase === 'start' && start === 'G3'){
-
-    if (comfort === 'Too high'){
-      route.phase = 'seekLowerComfort';
-      route.queue = ['F3','D3','Bb2','A2','G2'];
-      advanceAdaptiveQueue();
-      return;
-    }
-
-    if (comfort === 'Too low'){
-      route.phase = 'seekUpperComfort';
-      route.queue = ['A3','Bb3','C4','D4','F4','G4','A4','Bb4','C5','D5'];
-      advanceAdaptiveQueue();
-      return;
-    }
-
-    // G3 was comfortable: check a little lower before exploring upward.
-    route.phase = 'lowerProbe';
-    route.queue = ['F3','D3'];
-    advanceAdaptiveQueue();
-    return;
-  }
-
-  /* We started too high and are moving down until something works. */
-  if (route.phase === 'seekLowerComfort'){
-
-    if (comfort === 'Easy' || comfort === 'Okay'){
-      const lower = nextLowerStart_(start);
-
-      if (lower && !tested(lower) && uniquePatternCount() < MAX_SCALE_PATTERNS){
-        route.phase = 'finalLowerProbe';
-        showPattern(lower, 'Listen and echo');
-      } else {
-        finishPatterns();
-      }
-      return;
-    }
-
-    if (comfort === 'Too low'){
-      const bridge = midpointProbe_(route.lastTooHighStart, start);
-
-      if (bridge && !tested(bridge) && uniquePatternCount() < MAX_SCALE_PATTERNS){
-        route.phase = 'bracketProbe';
-        showPattern(bridge, 'Listen and echo');
-      } else {
-        finishPatterns();
-      }
-      return;
-    }
-
-    advanceAdaptiveQueue();
-    return;
-  }
-
-  /* One lower check after a comfortable lower/changing-voice window. */
-  if (route.phase === 'finalLowerProbe'){
-    finishPatterns();
-    return;
-  }
-
-  /* G3 worked; check F3/D3, then explore upward. */
-  if (route.phase === 'lowerProbe'){
-
-    if (comfort === 'Easy' || comfort === 'Okay'){
-      if (route.queue.length && uniquePatternCount() < MAX_SCALE_PATTERNS){
-        advanceAdaptiveQueue();
-      } else {
-        beginUpperExploration_();
-      }
-      return;
-    }
-
-    // Once the lower probe is too low (or unexpectedly too high),
-    // the comfortable G3 evidence is enough to begin moving upward.
-    beginUpperExploration_();
-    return;
-  }
-
-  /* G3 was too low; move upward until the first comfortable window. */
-  if (route.phase === 'seekUpperComfort'){
-
-    if (comfort === 'Easy' || comfort === 'Okay'){
-      beginUpperExploration_(start);
-      return;
-    }
-
-    if (comfort === 'Too high'){
-      const bridge = midpointProbe_(route.lastTooLowStart, start);
-
-      if (bridge && !tested(bridge) && uniquePatternCount() < MAX_SCALE_PATTERNS){
-        route.phase = 'bracketProbe';
-        showPattern(bridge, 'Listen and echo');
-      } else {
-        finishPatterns();
-      }
-      return;
-    }
-
-    advanceAdaptiveQueue();
-    return;
-  }
-
-  /* A midpoint pattern used only when Too low and Too high bracket each other. */
-  if (route.phase === 'bracketProbe'){
-
-    if (comfort === 'Easy' || comfort === 'Okay'){
-      beginUpperExploration_(start);
-    } else {
-      finishPatterns();
-    }
-    return;
-  }
-
-  /* Once a comfortable window exists, explore upward to the first Too high. */
-  if (route.phase === 'upperExplore'){
-
-    if (comfort === 'Too high'){
-      finishPatterns();
-      return;
-    }
-
-    advanceAdaptiveQueue();
-    return;
-  }
-
-  finishPatterns();
+function isComfortableResponse_(comfort){
+  return comfort === 'Easy' || comfort === 'Okay';
 }
 
 
-function advanceAdaptiveQueue(){
-
-  if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
-    finishPatterns();
-    return;
-  }
-
-  while (route.queue.length){
-    const next = route.queue.shift();
-
-    if (!tested(next) && patternPlayable(next)){
-      showPattern(next, 'Listen and echo');
-      return;
-    }
-  }
-
-  finishPatterns();
-}
-
-
-function beginUpperExploration_(fromStart){
-  route.phase = 'upperExplore';
-
-  const anchor = fromStart || (state.patternHistory.filter(function(x){return x.comfort==='Easy'||x.comfort==='Okay';}).slice(-1)[0]||{}).start || 'G3';
-  const anchorMidi = NOTE_TO_MIDI[anchor];
-
-  route.queue = UPPER_SEQUENCE.filter(function(name){
-    return NOTE_TO_MIDI[name] > anchorMidi && !tested(name);
-  });
-
-  advanceAdaptiveQueue();
-}
-
-
-function nextLowerStart_(start){
-  const index = LOWER_SEQUENCE.indexOf(start);
-
-  if (index >= 0 && index + 1 < LOWER_SEQUENCE.length){
-    return LOWER_SEQUENCE[index + 1];
-  }
-
-  const startMidi = NOTE_TO_MIDI[start];
-  const lower = LOWER_SEQUENCE.filter(function(name){
-    return NOTE_TO_MIDI[name] < startMidi && !tested(name);
-  });
-
-  return lower.length ? lower[0] : '';
-}
-
-
-function midpointProbe_(lowStart, highStart){
-  if (!lowStart || !highStart){
-    return '';
-  }
-
-  const lowMidi = Math.min(NOTE_TO_MIDI[lowStart], NOTE_TO_MIDI[highStart]);
-  const highMidi = Math.max(NOTE_TO_MIDI[lowStart], NOTE_TO_MIDI[highStart]);
-  const midpoint = (lowMidi + highMidi) / 2;
-
-  const candidates = Object.keys(NOTE_TO_MIDI)
+function rangeCandidatesBelow_(startName){
+  const startMidi = NOTE_TO_MIDI[startName];
+  return RANGE_STARTS
     .filter(function(name){
-      const midi = NOTE_TO_MIDI[name];
-      return midi > lowMidi && midi < highMidi && !tested(name);
+      return NOTE_TO_MIDI[name] < startMidi && !tested(name) && patternPlayable(name);
     })
-    .sort(function(a,b){
-      return Math.abs(NOTE_TO_MIDI[a] - midpoint) -
-             Math.abs(NOTE_TO_MIDI[b] - midpoint);
-    });
+    .sort(function(a,b){ return NOTE_TO_MIDI[b] - NOTE_TO_MIDI[a]; });
+}
 
-  return candidates.length ? candidates[0] : '';
+
+function rangeCandidatesAbove_(startName){
+  const startMidi = NOTE_TO_MIDI[startName];
+  return RANGE_STARTS
+    .filter(function(name){
+      return NOTE_TO_MIDI[name] > startMidi && !tested(name) && patternPlayable(name);
+    })
+    .sort(function(a,b){ return NOTE_TO_MIDI[a] - NOTE_TO_MIDI[b]; });
+}
+
+
+function showNextLower_(fromStart){
+  if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
+    finishPatterns();
+    return;
+  }
+
+  const options = rangeCandidatesBelow_(fromStart);
+  if (!options.length){
+    beginUpperBoundarySearch_();
+    return;
+  }
+
+  route.phase = route.anchor ? 'seekLowerBoundary' : 'findAnchorLower';
+  showPattern(options[0], 'Listen and echo');
+}
+
+
+function showNextUpper_(fromStart){
+  if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
+    finishPatterns();
+    return;
+  }
+
+  const options = rangeCandidatesAbove_(fromStart);
+  if (!options.length){
+    finishPatterns();
+    return;
+  }
+
+  route.phase = route.anchor ? 'seekUpperBoundary' : 'findAnchorUpper';
+  showPattern(options[0], 'Listen and echo');
+}
+
+
+function setComfortableAnchor_(start){
+  if (!route.anchor){
+    route.anchor = start;
+  }
+
+  /*
+   * If the opening search already crossed a boundary, keep that evidence.
+   * Otherwise, deliberately seek the lower boundary first, then the upper.
+   */
+  if (!route.lowerBoundaryStart){
+    const lower = rangeCandidatesBelow_(route.anchor);
+    if (lower.length && uniquePatternCount() < MAX_SCALE_PATTERNS){
+      route.phase = 'seekLowerBoundary';
+      showPattern(lower[0], 'Listen and echo');
+      return;
+    }
+  }
+
+  beginUpperBoundarySearch_();
+}
+
+
+function beginUpperBoundarySearch_(){
+  if (!route.anchor){
+    finishPatterns();
+    return;
+  }
+
+  if (route.upperBoundaryStart){
+    finishPatterns();
+    return;
+  }
+
+  const upper = rangeCandidatesAbove_(route.anchor);
+  if (!upper.length || uniquePatternCount() >= MAX_SCALE_PATTERNS){
+    finishPatterns();
+    return;
+  }
+
+  route.phase = 'seekUpperBoundary';
+  showPattern(upper[0], 'Listen and echo');
+}
+
+
+/********************************************************************
+ * ADAPTIVE RANGE ROUTING — vNEXT2.7
+ *
+ * Purpose:
+ * - Find a comfortable five-note anchor.
+ * - Then seek BOTH the lower and upper usable boundaries when possible.
+ * - Stop at the first clear Too low / Too high boundary in each direction.
+ * - Do not force every singer through a fixed battery.
+ * - Safety cap: MAX_SCALE_PATTERNS unique scale patterns.
+ *
+ * The later analysis layer can distinguish:
+ * - observed acoustic low/high across valid recordings,
+ * - comfortable five-note range from Easy/Okay patterns,
+ * - approximate lower/upper comfort boundaries.
+ ********************************************************************/
+function nextPattern(start, comfort){
+  if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
+    finishPatterns();
+    return;
+  }
+
+  /* Find the first comfortable anchor. */
+  if (!route.anchor){
+    if (isComfortableResponse_(comfort)){
+      setComfortableAnchor_(start);
+      return;
+    }
+
+    if (comfort === 'Too high'){
+      if (!route.upperBoundaryStart){
+        route.upperBoundaryStart = start;
+      }
+      showNextLower_(start);
+      return;
+    }
+
+    if (comfort === 'Too low'){
+      if (!route.lowerBoundaryStart){
+        route.lowerBoundaryStart = start;
+      }
+      showNextUpper_(start);
+      return;
+    }
+
+    finishPatterns();
+    return;
+  }
+
+  /* After an anchor exists, deliberately seek the lower boundary. */
+  if (route.phase === 'seekLowerBoundary'){
+    if (comfort === 'Too low'){
+      route.lowerBoundaryStart = start;
+      beginUpperBoundarySearch_();
+      return;
+    }
+
+    if (isComfortableResponse_(comfort)){
+      showNextLower_(start);
+      return;
+    }
+
+    // An unexpected Too high while moving down is contradictory evidence.
+    // Do not push farther down; preserve the data and move to the upper side.
+    beginUpperBoundarySearch_();
+    return;
+  }
+
+  /* If we were searching downward just to find an anchor. */
+  if (route.phase === 'findAnchorLower'){
+    if (isComfortableResponse_(comfort)){
+      setComfortableAnchor_(start);
+      return;
+    }
+
+    if (comfort === 'Too high'){
+      showNextLower_(start);
+      return;
+    }
+
+    if (comfort === 'Too low'){
+      route.lowerBoundaryStart = start;
+      finishPatterns();
+      return;
+    }
+  }
+
+  /* If we were searching upward just to find an anchor. */
+  if (route.phase === 'findAnchorUpper'){
+    if (isComfortableResponse_(comfort)){
+      setComfortableAnchor_(start);
+      return;
+    }
+
+    if (comfort === 'Too low'){
+      showNextUpper_(start);
+      return;
+    }
+
+    if (comfort === 'Too high'){
+      route.upperBoundaryStart = start;
+      finishPatterns();
+      return;
+    }
+  }
+
+  /* Seek the upper boundary after a comfortable anchor is known. */
+  if (route.phase === 'seekUpperBoundary'){
+    if (comfort === 'Too high'){
+      route.upperBoundaryStart = start;
+      finishPatterns();
+      return;
+    }
+
+    // Easy/Okay continues upward. A surprising Too low also continues upward,
+    // because the purpose of this phase is to find where the upper side stops.
+    showNextUpper_(start);
+    return;
+  }
+
+  finishPatterns();
+}
+
+
+function historyActualStartFor_(startName){
+  for (let i = state.patternHistory.length - 1; i >= 0; i--){
+    const item = state.patternHistory[i];
+    if (item.start === startName && Number.isFinite(Number(item.actualStartMidi))){
+      return Number(item.actualStartMidi);
+    }
+  }
+  return null;
+}
+
+
+function addRangeRoutingSummary_(){
+  if (route.summaryAdded) return;
+  route.summaryAdded = true;
+
+  const comfortable = state.patternHistory.filter(function(item){
+    return (item.comfort === 'Easy' || item.comfort === 'Okay') &&
+      Number.isFinite(Number(item.actualStartMidi));
+  });
+
+  if (!comfortable.length) return;
+
+  const starts = comfortable.map(function(item){ return Number(item.actualStartMidi); });
+  const comfortableLow = Math.min.apply(null, starts);
+  const comfortableHigh = Math.max.apply(null, starts.map(function(m){ return m + 7; }));
+
+  const lowBoundaryMidi = route.lowerBoundaryStart ? historyActualStartFor_(route.lowerBoundaryStart) : null;
+  const highBoundaryMidi = route.upperBoundaryStart ? historyActualStartFor_(route.upperBoundaryStart) : null;
+
+  state.patternHistory.push({
+    exercise:'CONTROLLED_RANGE_ROUTING_SUMMARY',
+    patternCount:uniquePatternCount(),
+    comfortablePatternLow:nameForMidi(comfortableLow),
+    comfortablePatternHigh:nameForMidi(comfortableHigh),
+    lowerBoundaryStart:route.lowerBoundaryStart || '',
+    lowerBoundaryActual:lowBoundaryMidi === null ? '' : nameForMidi(lowBoundaryMidi),
+    upperBoundaryStart:route.upperBoundaryStart || '',
+    upperBoundaryActual:highBoundaryMidi === null ? '' : nameForMidi(highBoundaryMidi),
+    anchorStart:route.anchor || '',
+    method:'Adaptive five-note boundary search'
+  });
 }
 
 
 function finishPatterns(){
   if (comfortablePatternCount() > 0){
+    addRangeRoutingSummary_();
     showSustained();
     return;
   }
