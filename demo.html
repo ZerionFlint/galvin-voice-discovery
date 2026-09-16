@@ -1,0 +1,59 @@
+<!doctype html>
+<!-- Galvin Voice Discovery vNext2.7 - Classroom view-only demo - 2026-09-16 -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Galvin Middle School Chorus — Voice Discovery Classroom Preview</title>
+<style>
+:root{--ink:#18212f;--muted:#667085;--line:#d9e0e8;--card:#fff;--bg:#f4f7fb;--accent:#3456d1;--accent2:#eef2ff;--ok:#147a52;--okbg:#ecfdf3;--bad:#b42318;--badbg:#fff0ee}
+*{box-sizing:border-box} body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:800px;margin:0 auto;padding:10px 12px 76px}.brand{font-weight:800;font-size:13px;letter-spacing:.08em;color:var(--accent);text-transform:uppercase;margin-bottom:7px}
+h1{font-size:26px;margin:0 0 4px} h2{font-size:22px;margin:0 0 7px} h3{font-size:18px;margin:0 0 7px} p{line-height:1.35;margin:8px 0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;margin-top:8px;box-shadow:0 2px 10px rgba(16,24,40,.04);min-height:340px}.soft{background:var(--accent2)}
+.muted,.small{color:var(--muted)}.small{font-size:13px}.stepTitle{font-weight:800;color:var(--accent);font-size:14px;text-transform:uppercase;letter-spacing:.05em}.cheer{font-weight:800;color:var(--accent)}
+.progress{height:6px;background:#e7ebf1;border-radius:999px;overflow:hidden;margin:7px 0 8px}.progress>div{height:100%;background:var(--accent);width:10%;transition:width .2s}
+button{font:inherit;font-weight:700;border:0;border-radius:11px;padding:12px 17px}button.primary{background:var(--accent);color:#fff}button.secondary{background:#e9edf3;color:var(--ink)}button.good{background:var(--ok);color:#fff}.btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.bigbtn{font-size:17px}
+.demoButton{opacity:.82;pointer-events:none}.status{border-radius:11px;padding:11px 13px;margin-top:10px}.status.ok{background:var(--okbg);color:var(--ok)}.status.bad{background:var(--badbg);color:var(--bad)}
+.comforts{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:12px}.comforts button{background:#eef1f6;color:var(--ink);padding:10px 6px}.contourWrap{background:#fbfcfe;border:1px solid var(--line);border-radius:12px;padding:6px 8px;margin:8px 0}.contourWrap svg{width:100%;max-height:180px;display:block}
+.noteCircle{fill:#fff;stroke:#8793a4;stroke-width:2}.solfegeText{font-size:17px;font-weight:800;text-anchor:middle;dominant-baseline:central;fill:var(--ink)}.contourLine{fill:none;stroke:#aab4c2;stroke-width:3}
+.previewBanner{background:#fff8db;border:1px solid #f0d56d;border-radius:10px;padding:9px 12px;font-size:13px;font-weight:700;margin:5px 0}.demoNav{position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);padding:9px 12px;display:flex;justify-content:center;gap:8px;z-index:10}.demoNav button{cursor:pointer}.screenNum{align-self:center;font-size:13px;color:var(--muted);min-width:110px;text-align:center}
+.fakeField{display:grid;grid-template-columns:1.2fr .8fr;gap:12px;margin-top:12px}.field{border:1px solid #aeb8c5;background:#fff;border-radius:10px;padding:11px 12px;color:#98a2b3}.gradeBtn{display:block;width:100%;text-align:left;background:#e9edf3;margin:7px 0}.langbar{display:flex;gap:7px;align-items:center;margin:4px 0 2px;font-size:13px}.langbar select{padding:7px 8px;border:1px solid #aeb8c5;border-radius:8px;background:#fff}
+@media(max-width:620px){.comforts{grid-template-columns:1fr 1fr}.fakeField{grid-template-columns:1fr}.card{min-height:0}.wrap{padding-bottom:86px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="brand">Galvin Middle School (Wakefield, MA) Chorus</div>
+  <h1>Voice Discovery</h1>
+  <div class="langbar"><b>Language:</b><select disabled><option>English</option><option>Español</option><option>Português</option></select><button class="secondary demoButton">🔊 Hear directions</button></div>
+  <div class="progress"><div id="bar"></div></div>
+  <div class="previewBanner">CLASSROOM PREVIEW — Nothing records, uploads, or saves on this page.</div>
+  <main id="app"></main>
+</div>
+<div class="demoNav">
+  <button class="secondary" id="prev" onclick="move(-1)">← Previous</button>
+  <span class="screenNum" id="count"></span>
+  <button class="primary" id="next" onclick="move(1)">Next →</button>
+</div>
+<script>
+const scaleSvg=`<div class="contourWrap"><svg viewBox="0 0 700 145" aria-label="Do Re Mi Fa Sol Fa Mi Re Do"><polyline class="contourLine" points="50,108 125,84 200,60 275,48 350,24 425,48 500,60 575,84 650,108"/>${['Do','Re','Mi','Fa','Sol','Fa','Mi','Re','Do'].map((s,i)=>{const x=50+i*75;const y=[108,84,60,48,24,48,60,84,108][i];return `<circle class="noteCircle" cx="${x}" cy="${y}" r="24"/><text class="solfegeText" x="${x}" y="${y}">${s}</text>`}).join('')}</svg></div>`;
+const leapSvg=`<div class="contourWrap"><svg viewBox="0 0 700 145"><polyline class="contourLine" points="90,108 220,62 350,24 480,62 610,108"/>${['Do','Mi','Sol','Mi','Do'].map((s,i)=>{const x=[90,220,350,480,610][i],y=[108,62,24,62,108][i];return `<circle class="noteCircle" cx="${x}" cy="${y}" r="24"/><text class="solfegeText" x="${x}" y="${y}">${s}</text>`}).join('')}</svg></div>`;
+const screens=[
+()=>`<div class="card soft"><h2>Welcome to Voice Discovery!</h2><p>This is <b>not an audition</b>. Completing Voice Discovery may count as a chorus assignment, but <b>your voice or singing ability is not graded</b>.</p><p>Sing comfortably, do your best, and never push or strain.</p><p>Voice Discovery helps Mr. Zini choose the <b>chorus part that best fits your voice</b>.</p><div class="fakeField"><div><b>School email</b><div class="field">student number @wpsstudent.org</div></div><div><b>Last name</b><div class="field">Last name</div></div></div><div class="btnrow"><button class="primary bigbtn demoButton">Let’s begin</button></div></div>`,
+()=>`<div class="card"><h2>Select your grade level</h2><p class="muted">Choose your current chorus grade.</p>${[5,6,7,8].map(g=>`<button class="gradeBtn demoButton"><b>Grade ${g}</b><br><span class="small">Grade ${g} Chorus</span></button>`).join('')}</div>`,
+()=>`<div class="card"><div class="stepTitle">Step 1 — Microphone</div><h2>Hi! Let’s get set up.</h2><p><b>Mic on. Volume up. Quiet space if possible.</b></p><p>Click <b>Enable microphone</b>. If your browser asks, choose <b>Allow</b>.</p><div class="btnrow"><button class="primary bigbtn demoButton">Enable microphone</button></div><div class="status ok"><b>Microphone allowed ✓</b> &nbsp; Then students click <b>Test microphone</b>.</div></div>`,
+()=>`<div class="card"><div class="stepTitle">Step 2 — Speaking</div><h2>Easy first one!</h2><p>Use your <b>normal speaking voice</b>. When the countdown ends, say:</p><p style="font-size:28px;font-weight:800">20, 19, 18, 17, 16, 15</p><div class="btnrow"><button class="primary bigbtn demoButton">Start recording</button><button class="primary bigbtn demoButton">Stop recording</button></div><p class="small">Afterward: <b>Use this recording</b> or <b>Try again</b>.</p></div>`,
+()=>`<div class="card"><div class="stepTitle">Step 3 — Natural singing</div><h2>Sing “Happy Birthday.”</h2><p>Sing the <b>entire song from beginning to end</b>. Use your own first name in the name line.</p><p>Start wherever your voice naturally wants to start. <b>There is no starting note to match.</b></p><div class="btnrow"><button class="primary bigbtn demoButton">Start recording</button><button class="primary bigbtn demoButton">Stop recording</button></div><p class="small">Then choose <b>Use this recording</b> or <b>Try again</b>.</p></div>`,
+()=>`<div class="card"><div class="stepTitle">Step 4 — Listen and echo</div><h2>Listen twice. Then sing it back on “loo.”</h2><p class="muted">If it feels too high or too low, stop. That helps us find your low and high boundaries.</p>${scaleSvg}<div class="btnrow"><button class="primary bigbtn demoButton">▶ Listen twice</button><button class="good bigbtn demoButton">Start recording</button><button class="primary bigbtn demoButton">Stop recording</button></div><div class="comforts"><button class="demoButton">Easy</button><button class="demoButton">Okay</button><button class="demoButton">Too high</button><button class="demoButton">Too low</button></div></div>`,
+()=>`<div class="card"><div class="stepTitle">Step 5 — Sustained sound</div><h2>Hold one comfortable pitch.</h2><p>Listen, then hold <b>“loo”</b> on the pitch for about 4 seconds. Keep it easy and relaxed.</p><div class="btnrow"><button class="primary bigbtn demoButton">▶ Hear my pitch</button><button class="good bigbtn demoButton">Start recording</button><button class="primary bigbtn demoButton">Stop recording</button></div><p class="small">Students can use the recording or try once again.</p></div>`,
+()=>`<div class="card"><div class="stepTitle">Step 6 — One last pattern</div><h2>One last pattern!</h2><p>This one has bigger jumps. <b>Listen twice, then sing it back on “loo.”</b></p>${leapSvg}<div class="btnrow"><button class="primary bigbtn demoButton">▶ Listen twice</button><button class="good bigbtn demoButton">Start recording</button><button class="primary bigbtn demoButton">Stop recording</button></div></div>`,
+()=>`<div class="card"><div class="stepTitle">Final step</div><h2>You did it! One quick question:</h2><p>How did Voice Discovery feel overall?</p><div class="comforts"><button class="demoButton">Comfortable</button><button class="demoButton">Mostly comfortable</button><button class="demoButton">A little nervous, but okay</button><button class="demoButton">Uncomfortable</button></div></div>`,
+()=>`<div class="card"><h2>All done! 🎉</h2><p class="cheer">Great job!</p><p>Mr. Zini will use the recordings to help choose the chorus part that best fits your voice.</p><p class="muted"><b>Your Voice Discovery was submitted successfully.</b> Your voice was not graded or scored. You’re finished — nice work!</p></div>`
+];
+let index=0;
+function render(){document.getElementById('app').innerHTML=screens[index]();document.getElementById('bar').style.width=((index+1)/screens.length*100)+'%';document.getElementById('count').textContent=(index+1)+' of '+screens.length;document.getElementById('prev').disabled=index===0;document.getElementById('next').disabled=index===screens.length-1;}
+function move(delta){index=Math.max(0,Math.min(screens.length-1,index+delta));render();window.scrollTo({top:0,behavior:'smooth'});}render();
+</script>
+</body>
+</html>
