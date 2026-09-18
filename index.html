@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.7 - Boundary range + classroom demo build - 2026-09-16 -->
+<!-- Galvin Voice Discovery vNext2.9 - Step 4 intelligent stop + progress clarity - 2026-09-18 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -261,6 +261,12 @@
     color:var(--ink);
     padding:14px;
   }
+
+  .step4Progress{background:#f7f8fb;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0 10px}
+  .step4Progress strong{display:block;font-size:15px;margin-bottom:4px}
+  .step4Progress .small{margin:0}
+  .miniTrack{height:8px;background:#e6eaf0;border-radius:999px;overflow:hidden;margin-top:8px}
+  .miniFill{height:100%;background:var(--accent);border-radius:999px;transition:width .2s ease}
 
   .comforts button.stop{
     background:#fff0ee;
@@ -903,6 +909,27 @@ function api(action, payload){
 
 
 /********************************************************************
+ * DEVICE / BROWSER COMPATIBILITY
+ ********************************************************************/
+
+function compatibilityNotice(){
+  const issues = [];
+  if (!window.isSecureContext) issues.push('secure connection');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) issues.push('microphone access');
+  if (!window.MediaRecorder) issues.push('audio recording');
+  if (!(window.AudioContext || window.webkitAudioContext)) issues.push('audio playback/analysis');
+
+  if (!issues.length){
+    return '<div class="status ok small"><b>Device check ✓</b> This browser supports the Voice Discovery recording tools.</div>';
+  }
+
+  return '<div class="status warn small"><b>This browser may not work correctly.</b> Missing: ' +
+    esc(issues.join(', ')) +
+    '. Try an updated Chrome, Edge, Safari, or Firefox browser, or complete Voice Discovery at school.</div>';
+}
+
+
+/********************************************************************
  * WELCOME / STUDENT IDENTITY
  ********************************************************************/
 
@@ -953,6 +980,8 @@ function showWelcome(){
           <input id="lastName" autocomplete="family-name">
         </div>
       </div>
+
+      ${compatibilityNotice()}
 
       <div class="btnrow compactButtons">
         <button class="primary bigbtn" onclick="lookup()">Let’s begin</button>
@@ -2946,7 +2975,7 @@ function drawContour(
  * CONTROLLED 5-NOTE PATTERNS
  ********************************************************************/
 
-const MAX_SCALE_PATTERNS = 9;
+const MAX_SCALE_PATTERNS = 8;
 
 /*
  * Ordered pattern starting pitches used by the adaptive range search.
@@ -2964,7 +2993,11 @@ let route = {
   anchor:'',
   lowerBoundaryStart:'',
   upperBoundaryStart:'',
-  summaryAdded:false
+  summaryAdded:false,
+  confirmationPending:false,
+  contradictionReason:'',
+  stopReason:'',
+  needsTeacherReview:false
 };
 
 
@@ -2984,7 +3017,11 @@ function beginPatterns(){
     anchor:'',
     lowerBoundaryStart:'',
     upperBoundaryStart:'',
-    summaryAdded:false
+    summaryAdded:false,
+    confirmationPending:false,
+    contradictionReason:'',
+    stopReason:'',
+    needsTeacherReview:false
   };
 
 
@@ -3027,6 +3064,71 @@ function scaleMeta(startName){
 }
 
 
+function step4DirectionText_(currentMidi){
+  const prior = state.patternHistory
+    .filter(function(item){ return Number.isFinite(Number(item.actualStartMidi)); })
+    .slice(-1)[0];
+
+  if (!prior) return 'We’ll start in a comfortable middle area.';
+
+  const delta = Number(currentMidi) - Number(prior.actualStartMidi);
+  if (delta > 0) return 'This pattern is a little higher than the last one.';
+  if (delta < 0) return 'This pattern is a little lower than the last one.';
+  return 'This pattern checks the same area again for confirmation.';
+}
+
+function scaleAnalysisReliable_(analysis){
+  if (!analysis || !analysis.sequence) return false;
+  const s = analysis.sequence;
+  const confidence = Number(analysis.confidence || 0);
+  const coverage = Number(s.coveragePct || 0);
+  const relative = Number(s.relativePitchMatchPct || 0);
+  const contour = Number(s.contourMatchPct || 0);
+  const interval = Number(s.intervalMatchPct || 0);
+
+  if (confidence < 45 || coverage < 55) return false;
+  return relative >= 45 || (contour >= 60 && interval >= 45);
+}
+
+function consecutiveUnreliablePatternCount_(){
+  let count = 0;
+  for (let i = state.patternHistory.length - 1; i >= 0; i--){
+    const item = state.patternHistory[i];
+    if (item.exercise !== 'CONTROLLED_SCALE') continue;
+    if (item.analysisReliable === false) count++;
+    else break;
+  }
+  return count;
+}
+
+function comfortContradiction_(latest){
+  if (!latest || !Number.isFinite(Number(latest.actualStartMidi))) return '';
+  const midi = Number(latest.actualStartMidi);
+  const tolerance = 1;
+  const comfortable = isComfortableResponse_(latest.comfort);
+
+  for (let i = 0; i < state.patternHistory.length - 1; i++){
+    const prior = state.patternHistory[i];
+    if (prior.exercise !== 'CONTROLLED_SCALE') continue;
+    if (!Number.isFinite(Number(prior.actualStartMidi))) continue;
+    const pm = Number(prior.actualStartMidi);
+
+    if (latest.comfort === 'Too low' && isComfortableResponse_(prior.comfort) && pm <= midi - tolerance){
+      return 'A lower pattern was comfortable, but a higher pattern was marked Too low.';
+    }
+    if (latest.comfort === 'Too high' && isComfortableResponse_(prior.comfort) && pm >= midi + tolerance){
+      return 'A higher pattern was comfortable, but a lower pattern was marked Too high.';
+    }
+    if (comfortable && prior.comfort === 'Too low' && pm >= midi + tolerance){
+      return 'A higher pattern was marked Too low, but a lower pattern was comfortable.';
+    }
+    if (comfortable && prior.comfort === 'Too high' && pm <= midi - tolerance){
+      return 'A lower pattern was marked Too high, but a higher pattern was comfortable.';
+    }
+  }
+  return '';
+}
+
 function showPattern(
   startName,
   label,
@@ -3049,6 +3151,13 @@ function showPattern(
       startName
     );
 
+  // Safety watchdog: a NEW routed pattern should never replay an actual
+  // starting pitch that was already completed. Retries (attempt 2) are allowed.
+  if ((attempt || 1) === 1 && testedActualMidi_(meta.startMidi)){
+    finishPatterns();
+    return;
+  }
+
 
   state._comfortLocked = false;
 
@@ -3056,7 +3165,8 @@ function showPattern(
     startName:startName,
     label:label,
     attempt:attempt,
-    meta:meta
+    meta:meta,
+    isConfirmation:!!route.confirmationPending
   };
 
 
@@ -3065,7 +3175,13 @@ function showPattern(
     <div class="card">
 
       <div class="stepTitle">
-        Step 4 — Listen and echo
+        Step 4 — Finding your comfortable range
+      </div>
+
+      <div class="step4Progress">
+        <strong>Step 4 continues — Pattern ${Math.min(MAX_SCALE_PATTERNS, uniquePatternCount() + 1)} of up to ${MAX_SCALE_PATTERNS}</strong>
+        <div class="small">${esc(step4DirectionText_(meta.startMidi))} ${state._currentPattern.isConfirmation ? 'This is one confirmation pattern, then Step 4 will stop.' : 'The pitch changes as we check your low and high range.'}</div>
+        <div class="miniTrack"><div class="miniFill" style="width:${Math.round((Math.min(MAX_SCALE_PATTERNS, uniquePatternCount() + 1)/MAX_SCALE_PATTERNS)*100)}%"></div></div>
       </div>
 
       <h2>
@@ -3073,7 +3189,7 @@ function showPattern(
       </h2>
 
       <p class="muted">
-        Sing comfortably. If it feels too high or too low, stop — that helps us find your low and high boundaries.
+        If a pattern feels too high or too low, stop and tell us. Step 4 may finish early when we have enough information.
       </p>
 
       <div
@@ -3338,10 +3454,33 @@ async function patternComfort(
       detectedLow:currentAnalysis ? currentAnalysis.detectedLow : '',
       detectedHigh:currentAnalysis ? currentAnalysis.detectedHigh : '',
       medianPitch:currentAnalysis ? currentAnalysis.medianPitch : '',
-      analysisConfidence:currentAnalysis ? currentAnalysis.confidence : ''
+      analysisConfidence:currentAnalysis ? currentAnalysis.confidence : '',
+      analysisReliable:scaleAnalysisReliable_(currentAnalysis)
     }
   );
 
+  const latest = state.patternHistory[state.patternHistory.length - 1];
+  const wasConfirmation = !!state._currentPattern.isConfirmation;
+
+  if (wasConfirmation){
+    route.confirmationPending = false;
+    route.needsTeacherReview = true;
+    finishPatterns('Comfort responses were inconsistent, so Step 4 stopped after one confirmation pattern.', true);
+    return;
+  }
+
+  if (consecutiveUnreliablePatternCount_() >= 2){
+    route.needsTeacherReview = true;
+    finishPatterns('Two patterns in a row did not give clear enough pitch-matching evidence.', true);
+    return;
+  }
+
+  const contradiction = comfortContradiction_(latest);
+  if (contradiction && !route.confirmationPending){
+    route.confirmationPending = true;
+    route.needsTeacherReview = true;
+    route.contradictionReason = contradiction;
+  }
 
   nextPattern(
     start,
@@ -3365,12 +3504,30 @@ function tested(startName){
 }
 
 
+/*
+ * Range routing must de-duplicate the ACTUAL pitch that students hear,
+ * not only the nominal pattern name. When octave-aware recentering changes
+ * routeOctaveShift, a different nominal name can otherwise map back onto a
+ * pitch the student already completed. That can feel like an endless loop.
+ */
+function testedActualMidi_(midi){
+  const wanted = Number(midi);
+  if (!Number.isFinite(wanted)) return false;
+  return state.patternHistory.some(function(item){
+    return Number.isFinite(Number(item.actualStartMidi)) &&
+      Math.round(Number(item.actualStartMidi)) === Math.round(wanted);
+  });
+}
+
+
 function uniquePatternCount(){
   const seen = {};
 
   state.patternHistory.forEach(function(item){
-    if (item.start){
-      seen[item.start] = true;
+    if (Number.isFinite(Number(item.actualStartMidi))){
+      seen[String(Math.round(Number(item.actualStartMidi)))] = true;
+    } else if (item.start){
+      seen['name:' + item.start] = true;
     }
   });
 
@@ -3390,29 +3547,56 @@ function isComfortableResponse_(comfort){
 }
 
 
+function referenceActualMidi_(startName){
+  const historic = historyActualStartFor_(startName);
+  return historic === null ? patternActualStartMidi(startName) : historic;
+}
+
 function rangeCandidatesBelow_(startName){
-  const startMidi = NOTE_TO_MIDI[startName];
+  const startMidi = referenceActualMidi_(startName);
   return RANGE_STARTS
     .filter(function(name){
-      return NOTE_TO_MIDI[name] < startMidi && !tested(name) && patternPlayable(name);
+      const actual = patternActualStartMidi(name);
+      return actual < startMidi && !testedActualMidi_(actual) && patternPlayable(name);
     })
-    .sort(function(a,b){ return NOTE_TO_MIDI[b] - NOTE_TO_MIDI[a]; });
+    .sort(function(a,b){ return patternActualStartMidi(b) - patternActualStartMidi(a); });
 }
 
 
 function rangeCandidatesAbove_(startName){
-  const startMidi = NOTE_TO_MIDI[startName];
+  const startMidi = referenceActualMidi_(startName);
   return RANGE_STARTS
     .filter(function(name){
-      return NOTE_TO_MIDI[name] > startMidi && !tested(name) && patternPlayable(name);
+      const actual = patternActualStartMidi(name);
+      return actual > startMidi && !testedActualMidi_(actual) && patternPlayable(name);
     })
-    .sort(function(a,b){ return NOTE_TO_MIDI[a] - NOTE_TO_MIDI[b]; });
+    .sort(function(a,b){ return patternActualStartMidi(a) - patternActualStartMidi(b); });
+}
+
+/*
+ * Probe several semitones away when possible instead of crawling through
+ * adjacent pitch levels. This finds useful boundaries with fewer patterns.
+ */
+function chooseBoundaryProbe_(options, fromStart){
+  if (!options.length) return '';
+  const fromMidi = referenceActualMidi_(fromStart);
+  let best = options[0];
+  let bestScore = Infinity;
+  options.forEach(function(name){
+    const distance = Math.abs(patternActualStartMidi(name) - fromMidi);
+    const score = Math.abs(distance - 4);
+    if (score < bestScore){
+      bestScore = score;
+      best = name;
+    }
+  });
+  return best;
 }
 
 
 function showNextLower_(fromStart){
   if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
-    finishPatterns();
+    finishPatterns('Maximum pattern limit reached.');
     return;
   }
 
@@ -3423,13 +3607,13 @@ function showNextLower_(fromStart){
   }
 
   route.phase = route.anchor ? 'seekLowerBoundary' : 'findAnchorLower';
-  showPattern(options[0], 'Listen and echo');
+  showPattern(chooseBoundaryProbe_(options, fromStart), 'Listen and echo');
 }
 
 
 function showNextUpper_(fromStart){
   if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
-    finishPatterns();
+    finishPatterns('Maximum pattern limit reached.');
     return;
   }
 
@@ -3440,7 +3624,7 @@ function showNextUpper_(fromStart){
   }
 
   route.phase = route.anchor ? 'seekUpperBoundary' : 'findAnchorUpper';
-  showPattern(options[0], 'Listen and echo');
+  showPattern(chooseBoundaryProbe_(options, fromStart), 'Listen and echo');
 }
 
 
@@ -3489,14 +3673,14 @@ function beginUpperBoundarySearch_(){
 
 
 /********************************************************************
- * ADAPTIVE RANGE ROUTING — vNEXT2.7
+ * ADAPTIVE RANGE ROUTING — vNEXT2.9 INTELLIGENT STOP
  *
  * Purpose:
  * - Find a comfortable five-note anchor.
  * - Then seek BOTH the lower and upper usable boundaries when possible.
  * - Stop at the first clear Too low / Too high boundary in each direction.
  * - Do not force every singer through a fixed battery.
- * - Safety cap: MAX_SCALE_PATTERNS unique scale patterns.
+ * - Safety cap: 8 unique ACTUAL scale starting pitches.
  *
  * The later analysis layer can distinguish:
  * - observed acoustic low/high across valid recordings,
@@ -3505,7 +3689,7 @@ function beginUpperBoundarySearch_(){
  ********************************************************************/
 function nextPattern(start, comfort){
   if (uniquePatternCount() >= MAX_SCALE_PATTERNS){
-    finishPatterns();
+    finishPatterns('Maximum pattern limit reached.');
     return;
   }
 
@@ -3517,17 +3701,13 @@ function nextPattern(start, comfort){
     }
 
     if (comfort === 'Too high'){
-      if (!route.upperBoundaryStart){
-        route.upperBoundaryStart = start;
-      }
+      route.upperBoundaryStart = start;
       showNextLower_(start);
       return;
     }
 
     if (comfort === 'Too low'){
-      if (!route.lowerBoundaryStart){
-        route.lowerBoundaryStart = start;
-      }
+      route.lowerBoundaryStart = start;
       showNextUpper_(start);
       return;
     }
@@ -3563,13 +3743,14 @@ function nextPattern(start, comfort){
     }
 
     if (comfort === 'Too high'){
+      route.upperBoundaryStart = start;
       showNextLower_(start);
       return;
     }
 
     if (comfort === 'Too low'){
       route.lowerBoundaryStart = start;
-      finishPatterns();
+      finishPatterns('Lower comfort boundary found, but no comfortable anchor was confirmed.');
       return;
     }
   }
@@ -3582,13 +3763,14 @@ function nextPattern(start, comfort){
     }
 
     if (comfort === 'Too low'){
+      route.lowerBoundaryStart = start;
       showNextUpper_(start);
       return;
     }
 
     if (comfort === 'Too high'){
       route.upperBoundaryStart = start;
-      finishPatterns();
+      finishPatterns('Upper comfort boundary found.');
       return;
     }
   }
@@ -3597,7 +3779,7 @@ function nextPattern(start, comfort){
   if (route.phase === 'seekUpperBoundary'){
     if (comfort === 'Too high'){
       route.upperBoundaryStart = start;
-      finishPatterns();
+      finishPatterns('Upper comfort boundary found.');
       return;
     }
 
@@ -3607,7 +3789,7 @@ function nextPattern(start, comfort){
     return;
   }
 
-  finishPatterns();
+  finishPatterns('Range routing completed.');
 }
 
 
@@ -3631,11 +3813,9 @@ function addRangeRoutingSummary_(){
       Number.isFinite(Number(item.actualStartMidi));
   });
 
-  if (!comfortable.length) return;
-
   const starts = comfortable.map(function(item){ return Number(item.actualStartMidi); });
-  const comfortableLow = Math.min.apply(null, starts);
-  const comfortableHigh = Math.max.apply(null, starts.map(function(m){ return m + 7; }));
+  const comfortableLow = starts.length ? Math.min.apply(null, starts) : null;
+  const comfortableHigh = starts.length ? Math.max.apply(null, starts.map(function(m){ return m + 7; })) : null;
 
   const lowBoundaryMidi = route.lowerBoundaryStart ? historyActualStartFor_(route.lowerBoundaryStart) : null;
   const highBoundaryMidi = route.upperBoundaryStart ? historyActualStartFor_(route.upperBoundaryStart) : null;
@@ -3643,32 +3823,78 @@ function addRangeRoutingSummary_(){
   state.patternHistory.push({
     exercise:'CONTROLLED_RANGE_ROUTING_SUMMARY',
     patternCount:uniquePatternCount(),
-    comfortablePatternLow:nameForMidi(comfortableLow),
-    comfortablePatternHigh:nameForMidi(comfortableHigh),
+    comfortablePatternLow:comfortableLow === null ? '' : nameForMidi(comfortableLow),
+    comfortablePatternHigh:comfortableHigh === null ? '' : nameForMidi(comfortableHigh),
     lowerBoundaryStart:route.lowerBoundaryStart || '',
     lowerBoundaryActual:lowBoundaryMidi === null ? '' : nameForMidi(lowBoundaryMidi),
     upperBoundaryStart:route.upperBoundaryStart || '',
     upperBoundaryActual:highBoundaryMidi === null ? '' : nameForMidi(highBoundaryMidi),
     anchorStart:route.anchor || '',
-    method:'Adaptive five-note boundary search'
+    stopReason:route.stopReason || (uniquePatternCount() >= MAX_SCALE_PATTERNS ? 'Maximum pattern limit reached.' : 'Range routing completed.'),
+    needsTeacherReview:!!route.needsTeacherReview,
+    reviewReason:route.contradictionReason || (route.needsTeacherReview ? (route.stopReason || 'Range evidence was unclear.') : ''),
+    rangeConfidence:rangeConfidence_(),
+    method:'Adaptive five-note boundary search with intelligent stop'
   });
 }
 
 
-function finishPatterns(){
-  if (comfortablePatternCount() > 0){
-    addRangeRoutingSummary_();
-    showSustained();
-    return;
+function rangeConfidence_(){
+  if (route.needsTeacherReview) return 'Low';
+  if (route.lowerBoundaryStart && route.upperBoundaryStart && comfortablePatternCount() > 0) return 'High';
+  if (comfortablePatternCount() > 0) return 'Moderate';
+  return 'Low';
+}
+
+function finishPatterns(reason, needsReview){
+  if (reason) route.stopReason = reason;
+  if (needsReview) route.needsTeacherReview = true;
+
+  addRangeRoutingSummary_();
+
+  if (comfortablePatternCount() === 0){
+    state.noComfortablePattern = true;
+    state.patternHistory.push({
+      exercise:'CONTROLLED_PATTERN_ROUTING',
+      comfort:'No comfortable five-note window found',
+      stopReason:route.stopReason || 'No comfortable five-note window found',
+      needsTeacherReview:route.needsTeacherReview
+    });
   }
 
-  state.noComfortablePattern = true;
-  state.patternHistory.push({
-    exercise:'CONTROLLED_PATTERN_ROUTING',
-    comfort:'No comfortable five-note window found'
-  });
+  showStep4Complete_();
+}
 
-  showNoComfortablePattern_();
+function showStep4Complete_(){
+  setCurrentScreen(showStep4Complete_);
+  setProgress(6);
+
+  const review = route.needsTeacherReview;
+  const nextText = comfortablePatternCount() > 0
+    ? 'Next, you’ll hold one comfortable pitch.'
+    : 'You do not need to keep testing your range today.';
+
+  app().innerHTML = `
+    <div class="card">
+      <div class="stepTitle">Step 4 — Complete</div>
+      <h2>Step 4 complete ✓</h2>
+      <div class="status ${review ? 'warn' : 'ok'}">
+        ${review
+          ? 'We have enough information for now. Mr. Zini may check a few notes with you in person later.'
+          : 'Great — we have enough information from these range patterns.'}
+      </div>
+      <p>${esc(nextText)}</p>
+      <div class="btnrow">
+        <button class="primary bigbtn" onclick="continueAfterStep4_()">Continue</button>
+      </div>
+    </div>
+  `;
+  schedulePageTranslation();
+}
+
+function continueAfterStep4_(){
+  if (comfortablePatternCount() > 0) showSustained();
+  else showFinish();
 }
 
 
