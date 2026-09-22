@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.9 - Step 4 intelligent stop + progress clarity - 2026-09-18 -->
+<!-- Galvin Voice Discovery vNext2.10 - stability + compatibility diagnostics - 2026-09-22 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -110,12 +110,29 @@
     border:1px solid #aeb8c5;
     border-radius:10px;
     background:#fff;
+    color:var(--ink);
+    position:relative;
+    z-index:3;
+    pointer-events:auto !important;
+    touch-action:manipulation;
+    -webkit-user-select:text;
+    user-select:text;
+    -webkit-appearance:none;
+    appearance:none;
+  }
+
+  input:focus{
+    outline:3px solid rgba(52,86,209,.18);
+    border-color:var(--accent);
   }
 
   .emailField{
     display:flex;
     align-items:stretch;
     width:100%;
+    position:relative;
+    z-index:2;
+    pointer-events:auto;
   }
 
   .emailField input{
@@ -134,6 +151,12 @@
     font-size:17px;
     white-space:nowrap;
   }
+
+  .emailSuffix{cursor:text;position:relative;z-index:4;pointer-events:auto}
+  .troubleBox{margin-top:10px}
+  .troubleBox summary{cursor:pointer;font-weight:700;color:var(--accent)}
+  .troubleBox ul{margin:7px 0 0 20px;padding:0}
+  .troubleBox li{margin:4px 0}
 
   button{
     font:inherit;
@@ -715,9 +738,29 @@ function startTranslationObserver(){
  * STATE
  ********************************************************************/
 
+const CLIENT_VERSION = '2026-09-22 vNext2.10';
+
+function getClientStartToken(){
+  const key='galvin-vd-client-start-token';
+  try{
+    let token=sessionStorage.getItem(key);
+    if (!token){
+      token=(window.crypto && crypto.randomUUID)
+        ? crypto.randomUUID()
+        : ('vd_' + Date.now() + '_' + Math.random().toString(36).slice(2));
+      sessionStorage.setItem(key,token);
+    }
+    return token;
+  } catch(e){
+    return 'vd_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+  }
+}
+
 let state = {
   lang:initialLanguage(),
   currentScreen:null,
+  currentStage:'welcome',
+  clientStartToken:getClientStartToken(),
   studentId:'',
   lastName:'',
   enrollment:null,
@@ -798,6 +841,117 @@ function disableButtons(){
       }
     );
 }
+
+
+/********************************************************************
+ * STABILITY / NON-PII DIAGNOSTICS
+ ********************************************************************/
+
+function coarseBrowser(){
+  const ua=navigator.userAgent || '';
+  if (/Edg\//.test(ua)) return 'Edge';
+  if (/CriOS\//.test(ua)) return 'Chrome iOS';
+  if (/FxiOS\//.test(ua)) return 'Firefox iOS';
+  if (/Chrome\//.test(ua) && !/Edg\//.test(ua)) return 'Chrome';
+  if (/Firefox\//.test(ua)) return 'Firefox';
+  if (/Safari\//.test(ua) && !/Chrome\//.test(ua) && !/CriOS\//.test(ua)) return 'Safari';
+  return 'Other';
+}
+
+function coarseOS(){
+  const ua=navigator.userAgent || '';
+  if (/CrOS/.test(ua)) return 'ChromeOS';
+  if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1)) return 'iOS/iPadOS';
+  if (/Android/.test(ua)) return 'Android';
+  if (/Windows/.test(ua)) return 'Windows';
+  if (/Macintosh|Mac OS X/.test(ua)) return 'macOS';
+  if (/Linux/.test(ua)) return 'Linux';
+  return 'Other';
+}
+
+function diagnosticPayload(category, message, extra){
+  return {
+    clientVersion:CLIENT_VERSION,
+    submissionCode:state.submissionCode || '',
+    stage:state.currentStage || '',
+    category:category || 'client',
+    browser:coarseBrowser(),
+    os:coarseOS(),
+    viewport:String(window.innerWidth || 0) + 'x' + String(window.innerHeight || 0),
+    language:state.lang || 'en',
+    secureContext:!!window.isSecureContext,
+    mediaDevices:!!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia),
+    mediaRecorder:!!window.MediaRecorder,
+    audioContext:!!(window.AudioContext || window.webkitAudioContext),
+    message:String(message || '').slice(0,300),
+    extra:extra || {}
+  };
+}
+
+function logDiagnostic(category, message, extra){
+  if (!window.opener || window.opener.closed) return;
+  try{
+    api('diagnostic', diagnosticPayload(category,message,extra)).catch(function(){});
+  } catch(e){}
+}
+
+function friendlyMediaError(err){
+  const name=(err && err.name) ? err.name : '';
+  if (name==='NotAllowedError' || name==='SecurityError'){
+    return 'Microphone permission was blocked. Allow microphone access for this page, then reload and try again.';
+  }
+  if (name==='NotFoundError' || name==='DevicesNotFoundError'){
+    return 'No microphone was found. Check the device microphone or use another device.';
+  }
+  if (name==='NotReadableError' || name==='TrackStartError'){
+    return 'The microphone is busy or unavailable. Close other apps or tabs using the microphone, then try again.';
+  }
+  if (name==='AbortError'){
+    return 'The microphone did not start correctly. Reload the page and try again.';
+  }
+  return 'The microphone could not start on this device. Reload and try again, or complete Voice Discovery with Mr. Zini at school.';
+}
+
+function technicalHelpHtml(){
+  return `
+    <details class="troubleBox">
+      <summary>Having trouble?</summary>
+      <ul class="small">
+        <li>Open Voice Discovery in a normal browser tab, not an embedded preview.</li>
+        <li>Reload the page once and try again.</li>
+        <li>Check that microphone permission is allowed for this site.</li>
+        <li>If it still does not work, tell Mr. Zini. You can complete it at school.</li>
+      </ul>
+    </details>`;
+}
+
+function showTechnicalError(title, message, category, extra){
+  logDiagnostic(category || 'technical_error', message, extra || {});
+  setProgress(1);
+  app().innerHTML = `
+    <div class="card">
+      <h2>${esc(title || 'Something did not load correctly')}</h2>
+      <div class="status bad">${esc(message || 'Please reload and try again.')}</div>
+      ${technicalHelpHtml()}
+      <div class="btnrow">
+        <button class="primary" onclick="window.location.reload()">Reload Voice Discovery</button>
+      </div>
+    </div>`;
+  schedulePageTranslation();
+}
+
+window.addEventListener('error',function(event){
+  logDiagnostic('javascript_error', event && event.message ? event.message : 'JavaScript error', {
+    errorName:event && event.error && event.error.name ? event.error.name : ''
+  });
+});
+
+window.addEventListener('unhandledrejection',function(event){
+  const reason=event && event.reason;
+  logDiagnostic('unhandled_promise', reason && reason.message ? reason.message : String(reason || 'Unhandled promise rejection'), {
+    errorName:reason && reason.name ? reason.name : ''
+  });
+});
 
 
 /********************************************************************
@@ -967,34 +1121,89 @@ function showWelcome(){
         </div>
       </details>
 
-      <div class="loginGrid">
-        <div>
-          <label>School email</label>
-          <div class="emailField">
-            <input id="studentId" inputmode="numeric" autocomplete="off" placeholder="student number">
-            <span class="emailSuffix">@wpsstudent.org</span>
+      <form id="loginForm" novalidate>
+        <div class="loginGrid">
+          <div>
+            <label for="studentId">School email</label>
+            <div class="emailField" id="emailField">
+              <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="student number">
+              <span class="emailSuffix" id="emailSuffix" role="button" tabindex="-1">@wpsstudent.org</span>
+            </div>
+          </div>
+          <div>
+            <label for="lastName">Last name</label>
+            <input id="lastName" type="text" autocomplete="family-name" autocorrect="off" autocapitalize="words" spellcheck="false" enterkeyhint="go">
           </div>
         </div>
-        <div>
-          <label>Last name</label>
-          <input id="lastName" autocomplete="family-name">
+
+        ${compatibilityNotice()}
+
+        <div class="btnrow compactButtons">
+          <button class="primary bigbtn" type="submit">Let’s begin</button>
         </div>
-      </div>
-
-      ${compatibilityNotice()}
-
-      <div class="btnrow compactButtons">
-        <button class="primary bigbtn" onclick="lookup()">Let’s begin</button>
-      </div>
+      </form>
 
       <div id="startMsg"></div>
-      <p class="small">Use your @wpsstudent.org account. If singing hurts, stop and tell Mr. Zini.</p>
+      ${technicalHelpHtml()}
+      <p class="small">If singing hurts, stop and tell Mr. Zini.</p>
     </div>
   `;
+
+  state.currentStage='welcome';
+  setupLoginInteractions();
+}
+
+
+function setupLoginInteractions(){
+  const form=document.getElementById('loginForm');
+  const studentId=document.getElementById('studentId');
+  const lastName=document.getElementById('lastName');
+  const suffix=document.getElementById('emailSuffix');
+  const emailField=document.getElementById('emailField');
+
+  if (form){
+    form.addEventListener('submit',function(event){
+      event.preventDefault();
+      lookup();
+    });
+  }
+
+  if (studentId && lastName){
+    studentId.addEventListener('keydown',function(event){
+      if (event.key==='Enter'){
+        event.preventDefault();
+        lastName.focus();
+      }
+    });
+  }
+
+  const focusStudentId=function(){
+    if (studentId && !studentId.disabled){
+      try{studentId.focus({preventScroll:true});}catch(e){studentId.focus();}
+    }
+  };
+
+  if (suffix){
+    suffix.addEventListener('click',focusStudentId);
+    suffix.addEventListener('pointerdown',function(event){event.preventDefault();focusStudentId();});
+  }
+  if (emailField){
+    emailField.addEventListener('click',function(event){
+      if (event.target===emailField) focusStudentId();
+    });
+  }
+
+  // Autofocus only on laptop/desktop-sized screens so mobile keyboards do not
+  // jump open unexpectedly. The field remains fully keyboard accessible.
+  if (window.innerWidth>=800){
+    setTimeout(focusStudentId,80);
+  }
 }
 
 
 async function lookup(){
+
+  state.currentStage='login_lookup';
 
   const studentId =
     document
@@ -1057,10 +1266,17 @@ async function lookup(){
 
   } catch(err){
 
+    logDiagnostic('lookup_error', err && err.message ? err.message : 'Student lookup failed', {
+      errorName:err && err.name ? err.name : '',
+      bridgeOpen:!!(window.opener && !window.opener.closed)
+    });
+
     msg.innerHTML =
       '<div class="status bad">' +
       esc(err.message) +
-      '</div>';
+      '</div>' +
+      technicalHelpHtml();
+    schedulePageTranslation();
   }
 }
 
@@ -1139,6 +1355,7 @@ function showEnrollmentChoices(matches){
 
 async function chooseEnrollment(match){
 
+  state.currentStage='start_submission';
   state.enrollment =
     match;
 
@@ -1162,7 +1379,10 @@ async function chooseEnrollment(match){
             state.lastName,
 
           enrollmentId:
-            match.enrollmentId
+            match.enrollmentId,
+
+          clientStartToken:
+            state.clientStartToken
         }
       );
 
@@ -1180,6 +1400,11 @@ async function chooseEnrollment(match){
 
   } catch(err){
 
+    logDiagnostic('start_error', err && err.message ? err.message : 'Could not start submission', {
+      errorName:err && err.name ? err.name : '',
+      bridgeOpen:!!(window.opener && !window.opener.closed)
+    });
+
     app().innerHTML =
 
       '<div class="card">' +
@@ -1187,6 +1412,8 @@ async function chooseEnrollment(match){
       '<div class="status bad">' +
       esc(err.message) +
       '</div>' +
+
+      technicalHelpHtml() +
 
       '<div class="btnrow">' +
 
@@ -1197,6 +1424,7 @@ async function chooseEnrollment(match){
       '</div>' +
 
       '</div>';
+    schedulePageTranslation();
   }
 }
 
@@ -1207,6 +1435,7 @@ async function chooseEnrollment(match){
 
 function showMicSetup(firstName){
 
+  state.currentStage='microphone_setup';
   setCurrentScreen(function(){ showMicSetup(firstName); });
   setProgress(2);
 
@@ -1228,6 +1457,7 @@ function showMicSetup(firstName){
 
 async function enableMic(){
 
+  state.currentStage='microphone_permission';
   const area =
     document.getElementById('micArea');
 
@@ -1321,28 +1551,21 @@ async function enableMic(){
 
   } catch(err){
 
+    const friendly=friendlyMediaError(err);
+    logDiagnostic('microphone_error', friendly, {
+      errorName:err && err.name ? err.name : ''
+    });
+
     area.innerHTML = `
 
       <div class="status bad">
-
-        <b>
-          Microphone is blocked.
-        </b>
-
-        <br>
-
-        Click the site-controls icon next to the web address
-        → allow <b>Microphone</b>
-        → reload this page.
-
+        <b>Microphone could not start.</b><br>
+        ${esc(friendly)}
       </div>
 
-      <p class="small">
-        If your Chromebook will not let you change it,
-        tell Mr. Zini.
-        You will get another private option.
-      </p>
+      ${technicalHelpHtml()}
     `;
+    schedulePageTranslation();
   }
 }
 
@@ -1572,6 +1795,13 @@ async function captureAudio(
   seconds,
   manual
 ){
+
+  if (!state.stream || !state.stream.active){
+    const err=new Error('The microphone connection was lost. Return to Step 1 or reload Voice Discovery.');
+    err.name='MicrophoneDisconnected';
+    logDiagnostic('recording_error',err.message,{errorName:err.name});
+    throw err;
+  }
 
   const mime =
     recorderMime();
@@ -2417,7 +2647,11 @@ async function usePendingRecording(){
 
     schedulePageTranslation();
   } catch(err){
-    if (area) area.innerHTML = '<div class="status bad">' + esc(err.message) + '</div><div class="btnrow"><button class="secondary" onclick="renderPendingReview()">Back</button></div>';
+    logDiagnostic('save_recording_error', err && err.message ? err.message : 'Could not save recording', {
+      errorName:err && err.name ? err.name : '',
+      recordingKind:review.kind || ''
+    });
+    if (area) area.innerHTML = '<div class="status bad">' + esc(err.message) + '</div>' + technicalHelpHtml() + '<div class="btnrow"><button class="secondary" onclick="renderPendingReview()">Back</button></div>';
     schedulePageTranslation();
   }
 }
@@ -2453,6 +2687,8 @@ async function retryPendingRecording(){
  ********************************************************************/
 
 function showSpeech(){
+
+  state.currentStage='step2_speaking';
 
   setCurrentScreen(showSpeech);
 
@@ -2530,6 +2766,8 @@ async function recordSpeech(){
  ********************************************************************/
 
 function showHappyBirthday(){
+
+  state.currentStage='step3_happy_birthday';
 
   setCurrentScreen(showHappyBirthday);
   setProgress(4);
@@ -3134,6 +3372,8 @@ function showPattern(
   label,
   attempt
 ){
+
+  state.currentStage='step4_range_pattern';
 
   if (!patternPlayable(startName)){
     finishPatterns();
@@ -3866,6 +4106,8 @@ function finishPatterns(reason, needsReview){
 }
 
 function showStep4Complete_(){
+
+  state.currentStage='step4_complete';
   setCurrentScreen(showStep4Complete_);
   setProgress(6);
 
@@ -3899,6 +4141,8 @@ function continueAfterStep4_(){
 
 
 function showNoComfortablePattern_(){
+
+  state.currentStage='step4_no_comfortable_pattern';
 
   setCurrentScreen(showNoComfortablePattern_);
   setProgress(6);
@@ -3953,6 +4197,8 @@ function bestComfortableStart(){
 
 
 function showSustained(){
+
+  state.currentStage='step5_sustained_loo';
 
   setCurrentScreen(showSustained);
 
@@ -4090,6 +4336,8 @@ async function recordSustain(){
  ********************************************************************/
 
 function showLeap(){
+
+  state.currentStage='step6_leap';
 
   setCurrentScreen(showLeap);
 
@@ -4236,6 +4484,8 @@ async function recordLeap(){
 
 function showFinish(){
 
+  state.currentStage='finish_question';
+
   setCurrentScreen(showFinish);
 
   setProgress(8);
@@ -4294,6 +4544,7 @@ async function finalize(
   overallComfort
 ){
 
+  state.currentStage='finalize';
   disableButtons();
 
 
@@ -4376,10 +4627,16 @@ async function finalize(
 
   } catch(err){
 
+    logDiagnostic('finalize_error', err && err.message ? err.message : 'Could not finalize submission', {
+      errorName:err && err.name ? err.name : ''
+    });
+
     msg.innerHTML =
       '<div class="status bad">' +
       esc(err.message) +
-      '</div>';
+      '</div>' +
+      technicalHelpHtml();
+    schedulePageTranslation();
   }
 }
 
@@ -4402,7 +4659,7 @@ if (!window.opener || window.opener.closed){
       <h2>Open Voice Discovery from Google Classroom</h2>
       ${languageHelp('direct')}
       <p>
-        Start with the Galvin Middle School Chorus Voice Discovery link while signed in to your <b>@wpsstudent.org</b> account.
+        Start with the Galvin Middle School Chorus Voice Discovery link from Google Classroom.
       </p>
       <p class="muted">
         Keep the first school tab open while you complete Voice Discovery.
@@ -4411,6 +4668,14 @@ if (!window.opener || window.opener.closed){
   `;
 } else {
   showWelcome();
+  const startupIssues=[];
+  if (!window.isSecureContext) startupIssues.push('secure connection');
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) startupIssues.push('microphone access');
+  if (!window.MediaRecorder) startupIssues.push('audio recording');
+  if (!(window.AudioContext || window.webkitAudioContext)) startupIssues.push('audio playback/analysis');
+  if (startupIssues.length){
+    logDiagnostic('compatibility_warning','Missing browser capabilities: ' + startupIssues.join(', '),{});
+  }
 }
 
 </script>
