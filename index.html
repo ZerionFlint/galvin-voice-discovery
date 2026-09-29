@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.11 - optional in-school completion workflow - 2026-09-29 -->
+<!-- Galvin Voice Discovery vNext2.12 - classroom pacing and recording stability - 2026-09-29 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -285,6 +285,25 @@
     padding:14px;
   }
 
+  .patternComforts{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    margin:12px 0 8px;
+  }
+  .patternComforts button{
+    min-height:54px;
+    background:#eef2ff;
+    color:var(--ink);
+    padding:12px;
+  }
+  .patternComforts button.rangeWarning{
+    background:#fff4e5;
+  }
+  .comfortQuestion h3{margin:0 0 4px}
+  .comfortQuestion p{margin:0}
+  #patternAction{scroll-margin-top:20px}
+
   .step4Progress{background:#f7f8fb;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0 10px}
   .step4Progress strong{display:block;font-size:15px;margin-bottom:4px}
   .step4Progress .small{margin:0}
@@ -334,6 +353,13 @@
     text-anchor:middle;
     dominant-baseline:central;
     fill:var(--ink);
+  }
+
+  .looText{
+    fill:#536178;
+    font-size:13px;
+    font-weight:700;
+    text-anchor:middle;
   }
 
   .termGrid{
@@ -412,14 +438,13 @@
 
 
   @media(min-width:700px){
-    .card{max-height:calc(100vh - 145px)}
-    .contourWrap svg{max-height:205px}
     .comforts{grid-template-columns:repeat(4,minmax(0,1fr))}
     .comforts button{padding:11px 8px}
   }
   @media(max-width:560px){
     h1{font-size:24px}
     .comforts{grid-template-columns:1fr 1fr}
+    .patternComforts{grid-template-columns:1fr 1fr}
     .termGrid{grid-template-columns:1fr}
     .loginGrid{grid-template-columns:1fr}
     .card{padding:14px}
@@ -516,7 +541,7 @@ const RECORDING_LIMITS = {
 };
 
 const CLASSROOM_RECORDING_LIMITS = {
-  speech:10, happyBirthday:35, scaleEcho:12, sustainedLoo:8, leapEcho:10
+  speech:12, happyBirthday:40, scaleEcho:16, sustainedLoo:10, leapEcho:14
 };
 
 function recordingLimit(kind){
@@ -526,7 +551,11 @@ function recordingLimit(kind){
 // No signal is never treated as proof of a voice characteristic. Silence
 // detection requires a prior sound onset; a hard limit covers silent clips.
 const CLASSROOM_MIN_SECONDS = {
-  speech:4, happyBirthday:10, scaleEcho:3, sustainedLoo:4, leapEcho:3
+  speech:5, happyBirthday:15, scaleEcho:7, sustainedLoo:5.5, leapEcho:5.5
+};
+
+const CLASSROOM_QUIET_SECONDS = {
+  speech:3, happyBirthday:4.5, scaleEcho:4.5, sustainedLoo:3, leapEcho:4
 };
 
 function recordingControls(message){
@@ -534,7 +563,7 @@ function recordingControls(message){
     '<div class="recording"><span class="dot"></span>' + message + '</div>' +
     '<div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>' +
     (CLASSROOM_MODE
-      ? '<p class="small muted">It stops after a few quiet seconds. Tap Stop if you finish sooner.</p>'
+      ? '<p class="small muted">Sing the whole answer. It will stop after a longer quiet pause, or you can tap Stop.</p>'
       : '<p class="small muted">Tap Stop when you finish. If you forget, it will stop automatically.</p>')
   );
 }
@@ -752,7 +781,7 @@ function startTranslationObserver(){
  * STATE
  ********************************************************************/
 
-const CLIENT_VERSION = '2026-09-29 vNext2.11 Classroom Mode';
+const CLIENT_VERSION = '2026-09-29 vNext2.12 Classroom Pacing';
 
 function getClientStartToken(){
   const key='galvin-vd-client-start-token';
@@ -1840,6 +1869,7 @@ async function captureAudio(
   let onsetMs = 0;
   let lastSoundMs = 0;
   const minSeconds = CLASSROOM_MIN_SECONDS[classroomKind] || 0;
+  const quietSeconds = CLASSROOM_QUIET_SECONDS[classroomKind] || 4;
 
 
   recorder.ondataavailable =
@@ -1936,7 +1966,7 @@ async function captureAudio(
           const now = Date.now();
           // Conservative onset threshold. Room noise may keep a recording
           // going to its time limit; it cannot cause an early silent stop.
-          if (level >= 0.008){
+          if (level >= 0.006){
             if (!onsetMs) onsetMs = now;
             if (now - onsetMs >= 300){
               soundStarted = true;
@@ -1946,7 +1976,7 @@ async function captureAudio(
             onsetMs = 0;
           }
           if (soundStarted && now - startMs >= minSeconds*1000 &&
-              now - lastSoundMs >= 3000 && recorder.state === 'recording'){
+              now - lastSoundMs >= quietSeconds*1000 && recorder.state === 'recording'){
             recorder.stop();
           }
         }
@@ -2691,6 +2721,9 @@ async function usePendingRecording(){
       // summary can distinguish range/comfort from octave matching.
       state._currentPattern.analysis = review.analysis || null;
       area.innerHTML = comfortButtons(review.exerciseId, review.attempt || 1);
+      if (CLASSROOM_MODE) setTimeout(function(){
+        if (area && area.isConnected) area.scrollIntoView({behavior:'smooth',block:'nearest'});
+      }, 90);
     } else if (review.kind === 'sustain'){
       area.innerHTML = '<div class="status ok">Perfect — got it! ✓</div><div class="btnrow"><button class="primary" onclick="showLeap()">Continue</button></div>';
     } else if (review.kind === 'leap'){
@@ -2698,6 +2731,18 @@ async function usePendingRecording(){
     }
 
     schedulePageTranslation();
+    if (CLASSROOM_MODE){
+      const nextStep = {
+        speech:showHappyBirthday, happy:beginPatterns,
+        sustain:showLeap, leap:showFinish
+      }[review.kind];
+      if (nextStep){
+        const savedStage = state.currentStage;
+        setTimeout(function(){
+          if (state.currentStage === savedStage && !state._pendingReview) nextStep();
+        }, 1800);
+      }
+    }
   } catch(err){
     logDiagnostic('save_recording_error', err && err.message ? err.message : 'Could not save recording', {
       errorName:err && err.name ? err.name : '',
@@ -3139,7 +3184,7 @@ function drawContour(
 
 
   const width = 760;
-  const height = 235;
+  const height = 255;
 
   const left = 50;
   const right = 50;
@@ -3249,7 +3294,8 @@ function drawContour(
         ys[i] +
         '">' +
         solfege[i] +
-        '</text>';
+        '</text>' +
+        '<text class="looText" x="' + x + '" y="' + (ys[i] + 42) + '">loo</text>';
     }
   );
 
@@ -3491,7 +3537,7 @@ function showPattern(
         class="contourWrap">
       </div>
 
-      <div class="btnrow">
+      <div class="btnrow" id="patternListenControls">
 
         <button
           class="primary bigbtn"
@@ -3520,6 +3566,8 @@ function showPattern(
 async function listenCurrent(){
 
   disableButtons();
+  const listenControls = document.getElementById('patternListenControls');
+  if (CLASSROOM_MODE && listenControls) listenControls.style.display='none';
 
 
   const pattern =
@@ -3545,7 +3593,9 @@ async function listenCurrent(){
     .getElementById(
       'patternAction'
     )
-    .innerHTML = `
+    .innerHTML = CLASSROOM_MODE ? `
+      <div class="status ok">Your turn — sing each note on <b>“loo.”</b> Recording begins after the countdown.</div>
+    ` : `
 
       <div class="status ok">
         Your turn — sing it back on <b>“loo.”</b>
@@ -3563,6 +3613,8 @@ async function listenCurrent(){
 
       </div>
     `;
+
+  if (CLASSROOM_MODE) await recordCurrentPattern();
 }
 
 
@@ -3596,13 +3648,12 @@ function comfortButtons(
 
   return `
 
-    <h3>
-      Nice! How did that feel?
-    </h3>
+    <div class="comfortQuestion"><h3>How did that pattern feel?</h3>
+    <p class="small">Choose one. Your answer picks the next pitch.</p></div>
 
     ${languageHelp('comfort')}
 
-    <div class="comforts">
+    <div class="patternComforts" role="group" aria-label="How did the singing pattern feel?">
 
       <button
         onclick="patternComfort('Easy','${exerciseId}',${attempt})">
@@ -3615,11 +3666,13 @@ function comfortButtons(
       </button>
 
       <button
+        class="rangeWarning"
         onclick="patternComfort('Too high','${exerciseId}',${attempt})">
         Too high
       </button>
 
       <button
+        class="rangeWarning"
         onclick="patternComfort('Too low','${exerciseId}',${attempt})">
         Too low
       </button>
@@ -3627,9 +3680,6 @@ function comfortButtons(
 
     </div>
 
-    <p class="small">
-      Your answer helps choose the next pattern. There is no wrong answer.
-    </p>
   `;
 }
 
@@ -4186,6 +4236,11 @@ function showStep4Complete_(){
     </div>
   `;
   schedulePageTranslation();
+  if (CLASSROOM_MODE){
+    setTimeout(function(){
+      if (state.currentStage === 'step4_complete') continueAfterStep4_();
+    }, review ? 5000 : 2500);
+  }
 }
 
 function continueAfterStep4_(){
@@ -4337,7 +4392,9 @@ async function listenSustain(){
     .getElementById(
       'sustainAction'
     )
-    .innerHTML = `
+    .innerHTML = CLASSROOM_MODE ? `
+      <p>Your turn! Hold <b>“loo”</b> comfortably. Recording begins after the countdown.</p>
+    ` : `
 
       <p>
         Your turn! Hold <b>“loo”</b> comfortably for about 4 seconds.
@@ -4355,6 +4412,8 @@ async function listenSustain(){
 
       </div>
     `;
+
+  if (CLASSROOM_MODE) await recordSustain();
 }
 
 
@@ -4477,7 +4536,9 @@ async function listenLeap(){
     .getElementById(
       'leapAction'
     )
-    .innerHTML = `
+    .innerHTML = CLASSROOM_MODE ? `
+      <p>Your turn! Sing each note on <b>“loo.”</b> Recording begins after the countdown.</p>
+    ` : `
 
       <div class="status ok">
         Your turn!
@@ -4499,6 +4560,8 @@ async function listenLeap(){
 
       </div>
     `;
+
+  if (CLASSROOM_MODE) await recordLeap();
 }
 
 
