@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.10 - stability + compatibility diagnostics - 2026-09-22 -->
+<!-- Galvin Voice Discovery vNext2.11 - optional in-school completion workflow - 2026-09-29 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -502,13 +502,11 @@ const LEAP_SOLFEGE =
   ['Do','Mi','Sol','Mi','Do'];
 
 
-/*
- * HYBRID RECORDING LIMITS
- *
- * Students always control when a recording begins and may tap Stop as soon
- * as they finish, falter, or become uncomfortable. These task-specific
- * maximums are only a safety net if a student forgets to tap Stop.
- */
+// Enabled only by the district Apps Script launcher with ?classroom=1.
+// The ordinary student flow and existing recording data remain unchanged.
+const CLASSROOM_MODE = new URLSearchParams(window.location.search).get('classroom') === '1';
+
+/* Students can always stop manually; each task also has a firm time limit. */
 const RECORDING_LIMITS = {
   speech:10,
   happyBirthday:25,
@@ -517,11 +515,27 @@ const RECORDING_LIMITS = {
   leapEcho:8,
 };
 
+const CLASSROOM_RECORDING_LIMITS = {
+  speech:10, happyBirthday:35, scaleEcho:12, sustainedLoo:8, leapEcho:10
+};
+
+function recordingLimit(kind){
+  return CLASSROOM_MODE ? CLASSROOM_RECORDING_LIMITS[kind] : RECORDING_LIMITS[kind];
+}
+
+// No signal is never treated as proof of a voice characteristic. Silence
+// detection requires a prior sound onset; a hard limit covers silent clips.
+const CLASSROOM_MIN_SECONDS = {
+  speech:4, happyBirthday:10, scaleEcho:3, sustainedLoo:4, leapEcho:3
+};
+
 function recordingControls(message){
   return (
     '<div class="recording"><span class="dot"></span>' + message + '</div>' +
     '<div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>' +
-    '<p class="small muted">Tap Stop when you finish. If you forget, it will stop automatically.</p>'
+    (CLASSROOM_MODE
+      ? '<p class="small muted">It stops after a few quiet seconds. Tap Stop if you finish sooner.</p>'
+      : '<p class="small muted">Tap Stop when you finish. If you forget, it will stop automatically.</p>')
   );
 }
 
@@ -738,7 +752,7 @@ function startTranslationObserver(){
  * STATE
  ********************************************************************/
 
-const CLIENT_VERSION = '2026-09-22 vNext2.10';
+const CLIENT_VERSION = '2026-09-29 vNext2.11 Classroom Mode';
 
 function getClientStartToken(){
   const key='galvin-vd-client-start-token';
@@ -1793,7 +1807,8 @@ function currentLevel(){
 
 async function captureAudio(
   seconds,
-  manual
+  manual,
+  classroomKind
 ){
 
   if (!state.stream || !state.stream.active){
@@ -1821,6 +1836,10 @@ async function captureAudio(
   let maxLevel = 0;
 
   let levelTimer = null;
+  let soundStarted = false;
+  let onsetMs = 0;
+  let lastSoundMs = 0;
+  const minSeconds = CLASSROOM_MIN_SECONDS[classroomKind] || 0;
 
 
   recorder.ondataavailable =
@@ -1847,6 +1866,11 @@ async function captureAudio(
 
         recorder.onerror =
           function(event){
+
+            clearInterval(levelTimer);
+            clearTimeout(state._manualStopTimer);
+            state._manualStopTimer = null;
+            state._manualRecorder = null;
 
             reject(
               event.error ||
@@ -1904,11 +1928,28 @@ async function captureAudio(
     setInterval(
       function(){
 
-        maxLevel =
-          Math.max(
-            maxLevel,
-            currentLevel()
-          );
+        const level = currentLevel();
+        maxLevel = Math.max(maxLevel, level);
+
+        if (CLASSROOM_MODE && manual && classroomKind &&
+            state.audioCtx && state.audioCtx.state === 'running'){
+          const now = Date.now();
+          // Conservative onset threshold. Room noise may keep a recording
+          // going to its time limit; it cannot cause an early silent stop.
+          if (level >= 0.008){
+            if (!onsetMs) onsetMs = now;
+            if (now - onsetMs >= 300){
+              soundStarted = true;
+              lastSoundMs = now;
+            }
+          } else {
+            onsetMs = 0;
+          }
+          if (soundStarted && now - startMs >= minSeconds*1000 &&
+              now - lastSoundMs >= 3000 && recorder.state === 'recording'){
+            recorder.stop();
+          }
+        }
 
       },
       75
@@ -2573,7 +2614,17 @@ async function queueRecordingReview(config){
   if (['happy','pattern','sustain','leap'].includes(config.kind)){
     config.analysis = await analyzeRecording(config);
   }
-  renderPendingReview();
+  // In-school flow removes the extra "Use this recording" tap only when
+  // the clip has a plausible signal and analysis did not request review.
+  // Unclear clips still allow the existing single retry or explicit use.
+  const lowSignal = config.recording.blob.size < 800 ||
+    config.recording.maxLevel < 0.0025;
+  if (CLASSROOM_MODE && !lowSignal &&
+      (!config.analysis || !config.analysis.needsReview)){
+    await usePendingRecording();
+  } else {
+    renderPendingReview();
+  }
 }
 
 function renderPendingReview(){
@@ -2584,9 +2635,9 @@ function renderPendingReview(){
 
   const usedRetries = state.recordingRetries[review.key] || 0;
   area.innerHTML = `
-    <div class="status ok"><b>Recording captured ✓</b></div>
+    <div class="status ${review.recording.maxLevel < 0.0025 ? 'warn' : 'ok'}"><b>${review.recording.maxLevel < 0.0025 ? 'Very little sound detected' : 'Recording captured ✓'}</b></div>
     ${reviewHint(review)}
-    <p>You do not need to listen to it. Use this recording, or try it one more time if you want.</p>
+    <p>You do not need to listen to it. ${review.recording.maxLevel < 0.0025 ? 'Check that the microphone is on. You can try again, or save this attempt for Mr. Zini to review.' : 'Use this recording, or try it one more time if you want.'}</p>
     <div class="btnrow">
       <button class="primary bigbtn" onclick="usePendingRecording()">Use this recording</button>
       ${usedRetries < 1 ? '<button class="secondary bigbtn" onclick="retryPendingRecording()">Try again</button>' : ''}
@@ -2611,7 +2662,8 @@ async function saveReviewAnalysis(review){
 
 async function usePendingRecording(){
   const review = state._pendingReview;
-  if (!review) return;
+  if (!review || state._savingPending) return;
+  state._savingPending = true;
   disableButtons();
   const area = document.getElementById(review.areaId);
   if (area) area.innerHTML = '<div class="status warn">Saving securely…</div>';
@@ -2653,6 +2705,8 @@ async function usePendingRecording(){
     });
     if (area) area.innerHTML = '<div class="status bad">' + esc(err.message) + '</div>' + technicalHelpHtml() + '<div class="btnrow"><button class="secondary" onclick="renderPendingReview()">Back</button></div>';
     schedulePageTranslation();
+  } finally {
+    state._savingPending = false;
   }
 }
 
@@ -2748,7 +2802,7 @@ async function recordSpeech(){
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.speech, true);
+    const recording = await captureAudio(recordingLimit('speech'), true, 'speech');
     queueRecordingReview({
       kind:'speech', key:'speech', areaId:'taskMsg',
       exerciseId:'SPEECH_20_TO_15', exerciseType:'speech',
@@ -2801,7 +2855,7 @@ async function recordHappy(){
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.happyBirthday, true);
+    const recording = await captureAudio(recordingLimit('happyBirthday'), true, 'happyBirthday');
     queueRecordingReview({
       kind:'happy', key:'happy', areaId:'taskMsg',
       exerciseId:'HAPPY_BIRTHDAY_FULL', exerciseType:'natural_song_full',
@@ -3521,7 +3575,7 @@ async function recordCurrentPattern(){
 
   const pattern = state._currentPattern;
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.scaleEcho, true);
+    const recording = await captureAudio(recordingLimit('scaleEcho'), true, 'scaleEcho');
     const exerciseId = 'SCALE_' + pattern.meta.tonic.replace('b','FLAT').replace('#','SHARP');
     queueRecordingReview({
       kind:'pattern', key:'pattern:' + exerciseId, areaId:'patternAction',
@@ -4312,7 +4366,7 @@ async function recordSustain(){
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.sustainedLoo, true);
+    const recording = await captureAudio(recordingLimit('sustainedLoo'), true, 'sustainedLoo');
     const pitchName = nameForMidi(state._sustainMidi);
     queueRecordingReview({
       kind:'sustain', key:'sustain', areaId:'sustainAction',
@@ -4456,7 +4510,7 @@ async function recordLeap(){
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.leapEcho, true);
+    const recording = await captureAudio(recordingLimit('leapEcho'), true, 'leapEcho');
     const midis = LEAP_INTERVALS.map(function(interval){ return state._leapTonic + interval; });
     const tonicName = nameForMidi(state._leapTonic);
     queueRecordingReview({
@@ -4544,6 +4598,10 @@ async function finalize(
   overallComfort
 ){
 
+  if (state._finalizing) return;
+  state._finalizing = true;
+  state._finishComfort = overallComfort;
+
   state.currentStage='finalize';
   disableButtons();
 
@@ -4598,7 +4656,14 @@ async function finalize(
     );
 
 
-    app().innerHTML = `
+    state.currentStage='submitted';
+    app().innerHTML = CLASSROOM_MODE ? `
+      <div class="card">
+        <h2>Submitted successfully ✓</h2>
+        <p>Tell Mr. Zini you are finished.</p>
+        <p class="muted">The next student’s sign-in page will appear in a few seconds.</p>
+      </div>
+    ` : `
 
       <div class="card">
 
@@ -4625,6 +4690,13 @@ async function finalize(
       </div>
     `;
 
+    if (CLASSROOM_MODE){
+      // A new page load clears every student-facing input and generates a
+      // fresh START token. Do this only after the server confirms submission.
+      try{ sessionStorage.removeItem('galvin-vd-client-start-token'); }catch(e){}
+      setTimeout(function(){ window.location.reload(); }, 6000);
+    }
+
   } catch(err){
 
     logDiagnostic('finalize_error', err && err.message ? err.message : 'Could not finalize submission', {
@@ -4635,9 +4707,17 @@ async function finalize(
       '<div class="status bad">' +
       esc(err.message) +
       '</div>' +
+      '<p>Nothing needs to be recorded again. Keep this page open and try submitting once more.</p>' +
+      '<button class="primary bigbtn" onclick="retryFinalize()">Try submitting again</button>' +
       technicalHelpHtml();
     schedulePageTranslation();
+  } finally {
+    state._finalizing = false;
   }
+}
+
+function retryFinalize(){
+  if (state._finishComfort) return finalize(state._finishComfort);
 }
 
 
