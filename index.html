@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.11 - direct access routing + stability - 2026-10-01 -->
+<!-- Galvin Voice Discovery vNext2.10 - stability + compatibility diagnostics - 2026-09-22 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -738,7 +738,7 @@ function startTranslationObserver(){
  * STATE
  ********************************************************************/
 
-const CLIENT_VERSION = '2026-10-01 vNext2.11';
+const CLIENT_VERSION = '2026-10-01 vNext2.12';
 
 function getClientStartToken(){
   const key='galvin-vd-client-start-token';
@@ -785,11 +785,15 @@ let state = {
 let pending = {};
 let reqSeq = 0;
 
+// Direct entry is allowed. The microphone page still needs the Apps Script
+// launcher open as its backend bridge, so a direct/bookmarked visit routes
+// automatically to the public launcher instead of displaying a Classroom gate.
 const PUBLIC_LAUNCHER_URL = 'https://script.google.com/macros/s/AKfycbxCPScBLQ4MBym6RmhKFXieeHKthdvFwLzqGurNAHihTPBnASJzuw0AjhQo5vYUW_9Mug/exec';
 
 function redirectToLauncher(){
   const lang = encodeURIComponent((state && state.lang) ? state.lang : 'en');
-  window.location.replace(PUBLIC_LAUNCHER_URL + '?source=direct&lang=' + lang);
+  const target = PUBLIC_LAUNCHER_URL + '?source=direct&lang=' + lang + '&v=212&cb=' + Date.now();
+  window.location.replace(target);
 }
 
 const TOTAL_STEPS = 8;
@@ -1018,9 +1022,11 @@ function api(action, payload){
   payload = payload || {};
 
   if (!window.opener || window.opener.closed){
+    // No Classroom requirement. A direct/bookmarked visit simply returns to
+    // the public launcher so the secure Apps Script bridge can be established.
     redirectToLauncher();
     return Promise.reject(
-      new Error('Opening the Voice Discovery launch page...')
+      new Error('Opening the Voice Discovery launcher...')
     );
   }
 
@@ -4628,8 +4634,18 @@ async function finalize(
           <b>Your Voice Discovery was submitted successfully.</b> Your voice was not graded or scored. You’re finished — nice work!
         </p>
 
+        <div class="status ok" id="nextStudentStatus">
+          Ready for the next student in <b><span id="nextStudentCountdown">8</span></b> seconds…
+        </div>
+
+        <div class="btnrow">
+          <button class="primary" onclick="resetForNextStudent()">Next student now</button>
+        </div>
+
       </div>
     `;
+
+    startNextStudentCountdown();
 
   } catch(err){
 
@@ -4648,6 +4664,44 @@ async function finalize(
 
 
 /********************************************************************
+ * SHARED-DEVICE RESET
+ *
+ * Reloading this student tab is intentional: it clears every student-specific
+ * variable, recording object, retry count, and assessment state. The opener
+ * (Apps Script launcher) remains open, so the fresh page goes directly back to
+ * the Student Number + Last Name screen for the next singer.
+ ********************************************************************/
+
+let nextStudentTimer = null;
+
+function resetForNextStudent(){
+  if (nextStudentTimer){
+    clearInterval(nextStudentTimer);
+    nextStudentTimer = null;
+  }
+  try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
+  window.location.replace(window.location.pathname + '?v=212&bridge=1&lang=' + encodeURIComponent(state.lang || 'en') + '&cb=' + Date.now());
+}
+
+function startNextStudentCountdown(){
+  let remaining = 8;
+  const el = document.getElementById('nextStudentCountdown');
+  if (el) el.textContent = String(remaining);
+
+  nextStudentTimer = setInterval(function(){
+    remaining -= 1;
+    const nowEl = document.getElementById('nextStudentCountdown');
+    if (nowEl) nowEl.textContent = String(Math.max(remaining,0));
+    if (remaining <= 0){
+      clearInterval(nextStudentTimer);
+      nextStudentTimer = null;
+      resetForNextStudent();
+    }
+  },1000);
+}
+
+
+/********************************************************************
  * START
  ********************************************************************/
 
@@ -4658,16 +4712,20 @@ document.documentElement.lang = state.lang || 'en';
 document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
 
 if (!window.opener || window.opener.closed){
+  setCurrentScreen(redirectToLauncher);
   setProgress(1);
   app().innerHTML = `
     <div class="card">
-      <h2>Opening Voice Discovery...</h2>
+      <h2>Opening Voice Discovery…</h2>
       <p>
-        You can use Voice Discovery from a direct link, bookmark, or school device. No Google Classroom launch is required.
+        Voice Discovery can be opened from a bookmark, direct link, or school device. Google Classroom is not required.
+      </p>
+      <p class="muted">
+        Connecting to the Voice Discovery launcher now…
       </p>
     </div>
   `;
-  setTimeout(redirectToLauncher, 50);
+  setTimeout(redirectToLauncher, 100);
 } else {
   showWelcome();
   const startupIssues=[];
