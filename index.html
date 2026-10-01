@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.10 - stability + compatibility diagnostics - 2026-09-22 -->
+<!-- Galvin Voice Discovery vNext2.13 - school station + direct student workflow - 2026-10-01 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -789,10 +789,12 @@ let reqSeq = 0;
 // launcher open as its backend bridge, so a direct/bookmarked visit routes
 // automatically to the public launcher instead of displaying a Classroom gate.
 const PUBLIC_LAUNCHER_URL = 'https://script.google.com/macros/s/AKfycbxCPScBLQ4MBym6RmhKFXieeHKthdvFwLzqGurNAHihTPBnASJzuw0AjhQo5vYUW_9Mug/exec';
+const STATION_MODE = new URLSearchParams(window.location.search).get('station') === '1';
+let stationInitStarted = false;
 
 function redirectToLauncher(){
   const lang = encodeURIComponent((state && state.lang) ? state.lang : 'en');
-  const target = PUBLIC_LAUNCHER_URL + '?source=direct&lang=' + lang + '&v=212&cb=' + Date.now();
+  const target = PUBLIC_LAUNCHER_URL + '?source=direct&lang=' + lang + '&v=213&cb=' + Date.now();
   window.location.replace(target);
 }
 
@@ -979,16 +981,40 @@ window.addEventListener(
       return;
     }
 
-    if (
-      !message ||
-      message.source !== 'galvin-vd-backend' ||
-      !message.reqId
-    ){
+    if (!message || message.source !== 'galvin-vd-backend'){
       return;
     }
 
-    const slot =
-      pending[message.reqId];
+    if (STATION_MODE && message.type === 'station_init' && message.payload){
+      if (stationInitStarted) return;
+      stationInitStarted = true;
+
+      const payload = message.payload;
+      const lang = LANGUAGE_LABELS[payload.lang] ? payload.lang : 'en';
+      state.lang = lang;
+      state.studentId = String(payload.studentId || '').trim();
+      state.lastName = String(payload.lastName || '').trim();
+      state.enrollment = payload.enrollment || null;
+      try{ localStorage.setItem('galvinVdLanguage', lang); }catch(e){}
+      document.documentElement.lang = lang;
+      document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+      const select = document.getElementById('globalLanguage');
+      if (select) select.value = lang;
+
+      if (!state.studentId || !state.lastName || !state.enrollment){
+        app().innerHTML = '<div class="card"><div class="status bad">Student information could not be loaded. Return to the Voice Discovery station and try again.</div></div>';
+        return;
+      }
+
+      chooseEnrollment(state.enrollment);
+      return;
+    }
+
+    if (!message.reqId){
+      return;
+    }
+
+    const slot = pending[message.reqId];
 
     if (!slot){
       return;
@@ -996,22 +1022,10 @@ window.addEventListener(
 
     delete pending[message.reqId];
 
-    if (
-      message.response &&
-      message.response.ok
-    ){
-      slot.resolve(
-        message.response.data
-      );
+    if (message.response && message.response.ok){
+      slot.resolve(message.response.data);
     } else {
-      slot.reject(
-        new Error(
-          message.response &&
-          message.response.error
-            ? message.response.error
-            : 'Backend error.'
-        )
-      );
+      slot.reject(new Error(message.response && message.response.error ? message.response.error : 'Backend error.'));
     }
   }
 );
@@ -1136,11 +1150,8 @@ function showWelcome(){
       <form id="loginForm" novalidate>
         <div class="loginGrid">
           <div>
-            <label for="studentId">School email</label>
-            <div class="emailField" id="emailField">
-              <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="student number">
-              <span class="emailSuffix" id="emailSuffix" role="button" tabindex="-1">@wpsstudent.org</span>
-            </div>
+            <label for="studentId">Student number</label>
+            <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="student number">
           </div>
           <div>
             <label for="lastName">Last name</label>
@@ -4680,7 +4691,22 @@ function resetForNextStudent(){
     nextStudentTimer = null;
   }
   try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
-  window.location.replace(window.location.pathname + '?v=212&bridge=1&lang=' + encodeURIComponent(state.lang || 'en') + '&cb=' + Date.now());
+
+  if (STATION_MODE && window.opener && !window.opener.closed){
+    try{
+      window.opener.postMessage({source:'galvin-vd-student', type:'station_complete'}, '*');
+      window.opener.focus();
+    }catch(e){}
+    try{ window.close(); }catch(e){}
+    setTimeout(function(){
+      if (!window.closed){
+        app().innerHTML = '<div class="card"><h2>All done!</h2><p>Your Voice Discovery was submitted successfully.</p><p class="muted">You can close this tab. The station is ready for the next student.</p></div>';
+      }
+    },250);
+    return;
+  }
+
+  window.location.replace(window.location.pathname + '?v=213&bridge=1&lang=' + encodeURIComponent(state.lang || 'en') + '&cb=' + Date.now());
 }
 
 function startNextStudentCountdown(){
@@ -4717,15 +4743,32 @@ if (!window.opener || window.opener.closed){
   app().innerHTML = `
     <div class="card">
       <h2>Opening Voice Discovery…</h2>
-      <p>
-        Voice Discovery can be opened from a bookmark, direct link, or school device. Google Classroom is not required.
-      </p>
-      <p class="muted">
-        Connecting to the Voice Discovery launcher now…
-      </p>
+      <p>Connecting to the Voice Discovery station…</p>
     </div>
   `;
   setTimeout(redirectToLauncher, 100);
+} else if (STATION_MODE) {
+  setCurrentScreen(function(){});
+  setProgress(1);
+  app().innerHTML = `
+    <div class="card">
+      <h2>Getting Voice Discovery ready…</h2>
+      <p class="muted">Please wait a moment.</p>
+    </div>
+  `;
+  const announceStationReady = function(){
+    if (stationInitStarted || !window.opener || window.opener.closed) return;
+    window.opener.postMessage({source:'galvin-vd-student', type:'station_ready'}, '*');
+  };
+  announceStationReady();
+  const stationReadyTimer = setInterval(function(){
+    if (stationInitStarted || !window.opener || window.opener.closed){
+      clearInterval(stationReadyTimer);
+      return;
+    }
+    announceStationReady();
+  },750);
+  setTimeout(function(){ clearInterval(stationReadyTimer); },10000);
 } else {
   showWelcome();
   const startupIssues=[];
