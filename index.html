@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.13 - school station + direct student workflow - 2026-10-01 -->
+<!-- Galvin Voice Discovery vNext2.14 - responsive school station + fixed email suffix - 2026-10-01 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -75,7 +75,8 @@
 
   .compactCard{padding:14px 18px}
   .compactButtons{margin-top:10px}
-  .loginGrid{display:grid;grid-template-columns:1.35fr .8fr;gap:12px;align-items:end;margin-top:8px}
+  .loginGrid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:end;margin-top:8px}
+  .loginGrid>div{min-width:0}
   .loginGrid label{margin-top:6px}
 
   .soft{background:var(--accent2)}
@@ -105,8 +106,8 @@
 
   input{
     width:100%;
-    font-size:17px;
-    padding:12px 13px;
+    font-size:16px;
+    padding:13px;
     border:1px solid #aeb8c5;
     border-radius:10px;
     background:#fff;
@@ -127,9 +128,11 @@
   }
 
   .emailField{
-    display:flex;
+    display:grid;
+    grid-template-columns:minmax(92px,1fr) auto;
     align-items:stretch;
     width:100%;
+    min-width:0;
     position:relative;
     z-index:2;
     pointer-events:auto;
@@ -148,8 +151,11 @@
     border-left:0;
     border-radius:0 10px 10px 0;
     background:#eef1f6;
-    font-size:17px;
+    font-size:16px;
+    font-weight:700;
     white-space:nowrap;
+    user-select:none;
+    -webkit-user-select:none;
   }
 
   .emailSuffix{cursor:text;position:relative;z-index:4;pointer-events:auto}
@@ -418,6 +424,7 @@
     .comforts button{padding:11px 8px}
   }
   @media(max-width:560px){
+    .emailSuffix{font-size:14px;padding:0 8px}
     h1{font-size:24px}
     .comforts{grid-template-columns:1fr 1fr}
     .termGrid{grid-template-columns:1fr}
@@ -794,7 +801,7 @@ let stationInitStarted = false;
 
 function redirectToLauncher(){
   const lang = encodeURIComponent((state && state.lang) ? state.lang : 'en');
-  const target = PUBLIC_LAUNCHER_URL + '?source=direct&lang=' + lang + '&v=213&cb=' + Date.now();
+  const target = PUBLIC_LAUNCHER_URL + '?source=direct&lang=' + lang + '&v=214&cb=' + Date.now();
   window.location.replace(target);
 }
 
@@ -1150,8 +1157,11 @@ function showWelcome(){
       <form id="loginForm" novalidate>
         <div class="loginGrid">
           <div>
-            <label for="studentId">Student number</label>
-            <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="student number">
+            <label id="studentEmailLabel" for="studentId">Student email</label>
+            <div class="emailField" id="emailField" role="group" aria-labelledby="studentEmailLabel">
+              <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" aria-label="Student number" placeholder="student number">
+              <span class="emailSuffix" id="emailSuffix" aria-hidden="true">@wpsstudent.org</span>
+            </div>
           </div>
           <div>
             <label for="lastName">Last name</label>
@@ -1232,6 +1242,8 @@ async function lookup(){
     document
       .getElementById('studentId')
       .value
+      .trim()
+      .replace(/@wpsstudent\.org$/i,'')
       .trim();
 
   const lastName =
@@ -4706,7 +4718,7 @@ function resetForNextStudent(){
     return;
   }
 
-  window.location.replace(window.location.pathname + '?v=213&bridge=1&lang=' + encodeURIComponent(state.lang || 'en') + '&cb=' + Date.now());
+  window.location.replace(window.location.pathname + '?v=214&bridge=1&lang=' + encodeURIComponent(state.lang || 'en') + '&cb=' + Date.now());
 }
 
 function startNextStudentCountdown(){
