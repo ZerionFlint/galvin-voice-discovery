@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.13 - microphone reliability candidate - 2026-10-02 -->
+<!-- Galvin Voice Discovery vNext2.16 - microphone reliability candidate - 2026-10-02 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -529,7 +529,13 @@ const LEAP_SOLFEGE =
 
 // Enabled only by the district Apps Script launcher with ?classroom=1.
 // The ordinary student flow and existing recording data remain unchanged.
-const CLASSROOM_MODE = new URLSearchParams(window.location.search).get('classroom') === '1';
+const launchParams = new URLSearchParams(window.location.search);
+const STATION_MODE = launchParams.get('station') === '1';
+const CLASSROOM_MODE = launchParams.has('classroom')
+  ? launchParams.get('classroom') === '1' : STATION_MODE;
+let stationOrigin = null;
+let stationInitialized = false;
+let stationReadyTimer = null;
 
 /* Students can always stop manually; each task also has a firm time limit. */
 const RECORDING_LIMITS = {
@@ -781,7 +787,7 @@ function startTranslationObserver(){
  * STATE
  ********************************************************************/
 
-const CLIENT_VERSION = '2026-10-02 vNext2.13 Microphone Reliability';
+const CLIENT_VERSION = '2026-10-02 vNext2.16 Microphone Reliability';
 
 function getClientStartToken(){
   const key='galvin-vd-client-start-token';
@@ -1001,13 +1007,69 @@ window.addEventListener('unhandledrejection',function(event){
  * APPS SCRIPT BACKEND BRIDGE
  ********************************************************************/
 
+function trustedStationEvent(event){
+  if (!window.opener || event.source !== window.opener) return false;
+  try {
+    const u = new URL(event.origin);
+    return u.protocol === 'https:' &&
+      (u.hostname === 'script.google.com' || u.hostname === 'script.googleusercontent.com' ||
+       u.hostname.endsWith('-script.googleusercontent.com'));
+  } catch(e){ return false; }
+}
+
+function notifyStation(type){
+  if (!window.opener || window.opener.closed) return;
+  // Only the readiness handshake may use '*'; it contains no personal data.
+  if (!stationOrigin && type !== 'station_ready') return;
+  window.opener.postMessage({source:'galvin-vd-student',type},stationOrigin || '*');
+}
+
+function stationWaiting(){
+  setProgress(1);
+  app().innerHTML = '<div class="card"><h2>Getting Voice Discovery ready…</h2>'+
+    '<p>Finish choosing your grade in the first tab. Your microphone setup will open here automatically.</p>'+
+    '<button class="secondary" onclick="window.opener.focus()">Return to sign-in tab</button>'+
+    '<p class="small">Voice Discovery 2.16</p></div>';
+  let tries=0;
+  clearInterval(stationReadyTimer);
+  notifyStation('station_ready');
+  stationReadyTimer=setInterval(function(){
+    if (stationInitialized || ++tries >= 60 || !window.opener || window.opener.closed){
+      clearInterval(stationReadyTimer);
+      if (!stationInitialized) app().innerHTML='<div class="card"><h2>Sign-in is not connected yet</h2><p>Return to the original school link and sign in again. Keep that tab open.</p></div>';
+      return;
+    }
+    notifyStation('station_ready');
+  },2000);
+}
+
+window.addEventListener('message', function(event){
+  if (!STATION_MODE || !trustedStationEvent(event)) return;
+  const m=event.data;
+  if (!m || m.source !== 'galvin-vd-backend' || m.type !== 'station_init' || stationInitialized) return;
+  const p=m.payload;
+  if (!p || typeof p.studentId !== 'string' || typeof p.lastName !== 'string' ||
+      !p.studentId.trim() || !p.lastName.trim() || !p.enrollment || !p.enrollment.enrollmentId) return;
+  stationOrigin=event.origin;
+  stationInitialized=true;
+  clearInterval(stationReadyTimer);
+  state.studentId=p.studentId;
+  state.lastName=p.lastName;
+  state.lang=p.lang || 'en';
+  const select=document.getElementById('globalLanguage');
+  if (select) select.value=state.lang;
+  document.documentElement.lang=state.lang;
+  document.documentElement.dir=state.lang==='ar'?'rtl':'ltr';
+  chooseEnrollment(p.enrollment);
+});
+
 window.addEventListener(
   'message',
   function(event){
 
     const message = event.data;
 
-    if (event.source !== window.opener){
+    if (!trustedStationEvent(event) || (stationOrigin && event.origin !== stationOrigin)){
       return;
     }
 
@@ -1084,7 +1146,7 @@ function api(action, payload){
             payload
           )
         },
-        '*'
+        stationOrigin || '*'
       );
 
       setTimeout(
@@ -1396,6 +1458,11 @@ function showEnrollmentChoices(matches){
 }
 
 
+function retryStudentStart(){
+  if (STATION_MODE && state.enrollment) chooseEnrollment(state.enrollment);
+  else showWelcome();
+}
+
 async function chooseEnrollment(match){
 
   state.currentStage='start_submission';
@@ -1492,7 +1559,7 @@ function showMicSetup(firstName){
       <div class="btnrow compactButtons">
         <button class="primary bigbtn" id="enableMicButton" onclick="enableMic()">Enable microphone</button>
       </div>
-      <p class="small">Microphone update 2.13 · ${CLASSROOM_MODE ? 'School mode' : 'Home mode'}</p><div id="micArea"></div>
+      <p class="small">Voice Discovery 2.16 · ${CLASSROOM_MODE ? 'School mode' : 'Home mode'}</p><div id="micArea"></div>
     </div>
   `;
 }
@@ -4666,9 +4733,16 @@ async function finalize(
       </div>
     `;
 
-    if (CLASSROOM_MODE){
-      // A new page load clears every student-facing input and generates a
-      // fresh START token. Do this only after the server confirms submission.
+    if (STATION_MODE){
+      notifyStation('station_complete');
+      state.studentId=''; state.lastName=''; state.firstName='';
+      state.enrollment=null; state.submissionCode=''; state._pendingReview=null;
+      state.patternHistory=[]; state.octaveEvidence=[];
+      try{ sessionStorage.removeItem('galvin-vd-client-start-token'); }catch(e){}
+      app().innerHTML = '<div class="card"><h2>Submitted successfully ✓</h2>'+
+        '<p>You are finished. Thank you for singing!</p>'+
+        (CLASSROOM_MODE ? '<p>The first tab is ready for the next student.</p><button class="primary" onclick="window.opener.focus();window.close()">Return to sign-in</button>' : '<p>You can close both Voice Discovery tabs now.</p>')+'</div>';
+    } else if (CLASSROOM_MODE){
       try{ sessionStorage.removeItem('galvin-vd-client-start-token'); }catch(e){}
       setTimeout(function(){ window.location.reload(); }, 6000);
     }
@@ -4723,7 +4797,7 @@ if (!window.opener || window.opener.closed){
     </div>
   `;
 } else {
-  showWelcome();
+  if (STATION_MODE) stationWaiting(); else showWelcome();
   const startupIssues=[];
   if (!window.isSecureContext) startupIssues.push('secure connection');
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) startupIssues.push('microphone access');
