@@ -1,5 +1,5 @@
 <!doctype html>
-<!-- Galvin Voice Discovery vNext2.14 - responsive school station + fixed email suffix - 2026-10-01 -->
+<!-- Galvin Voice Discovery vNext2.13 - microphone reliability candidate - 2026-10-02 -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -75,8 +75,7 @@
 
   .compactCard{padding:14px 18px}
   .compactButtons{margin-top:10px}
-  .loginGrid{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;align-items:end;margin-top:8px}
-  .loginGrid>div{min-width:0}
+  .loginGrid{display:grid;grid-template-columns:1.35fr .8fr;gap:12px;align-items:end;margin-top:8px}
   .loginGrid label{margin-top:6px}
 
   .soft{background:var(--accent2)}
@@ -106,8 +105,8 @@
 
   input{
     width:100%;
-    font-size:16px;
-    padding:13px;
+    font-size:17px;
+    padding:12px 13px;
     border:1px solid #aeb8c5;
     border-radius:10px;
     background:#fff;
@@ -128,11 +127,9 @@
   }
 
   .emailField{
-    display:grid;
-    grid-template-columns:minmax(92px,1fr) auto;
+    display:flex;
     align-items:stretch;
     width:100%;
-    min-width:0;
     position:relative;
     z-index:2;
     pointer-events:auto;
@@ -151,11 +148,8 @@
     border-left:0;
     border-radius:0 10px 10px 0;
     background:#eef1f6;
-    font-size:16px;
-    font-weight:700;
+    font-size:17px;
     white-space:nowrap;
-    user-select:none;
-    -webkit-user-select:none;
   }
 
   .emailSuffix{cursor:text;position:relative;z-index:4;pointer-events:auto}
@@ -291,6 +285,25 @@
     padding:14px;
   }
 
+  .patternComforts{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    margin:12px 0 8px;
+  }
+  .patternComforts button{
+    min-height:54px;
+    background:#eef2ff;
+    color:var(--ink);
+    padding:12px;
+  }
+  .patternComforts button.rangeWarning{
+    background:#fff4e5;
+  }
+  .comfortQuestion h3{margin:0 0 4px}
+  .comfortQuestion p{margin:0}
+  #patternAction{scroll-margin-top:20px}
+
   .step4Progress{background:#f7f8fb;border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0 10px}
   .step4Progress strong{display:block;font-size:15px;margin-bottom:4px}
   .step4Progress .small{margin:0}
@@ -340,6 +353,13 @@
     text-anchor:middle;
     dominant-baseline:central;
     fill:var(--ink);
+  }
+
+  .looText{
+    fill:#536178;
+    font-size:13px;
+    font-weight:700;
+    text-anchor:middle;
   }
 
   .termGrid{
@@ -418,15 +438,13 @@
 
 
   @media(min-width:700px){
-    .card{max-height:calc(100vh - 145px)}
-    .contourWrap svg{max-height:205px}
     .comforts{grid-template-columns:repeat(4,minmax(0,1fr))}
     .comforts button{padding:11px 8px}
   }
   @media(max-width:560px){
-    .emailSuffix{font-size:14px;padding:0 8px}
     h1{font-size:24px}
     .comforts{grid-template-columns:1fr 1fr}
+    .patternComforts{grid-template-columns:1fr 1fr}
     .termGrid{grid-template-columns:1fr}
     .loginGrid{grid-template-columns:1fr}
     .card{padding:14px}
@@ -509,13 +527,11 @@ const LEAP_SOLFEGE =
   ['Do','Mi','Sol','Mi','Do'];
 
 
-/*
- * HYBRID RECORDING LIMITS
- *
- * Students always control when a recording begins and may tap Stop as soon
- * as they finish, falter, or become uncomfortable. These task-specific
- * maximums are only a safety net if a student forgets to tap Stop.
- */
+// Enabled only by the district Apps Script launcher with ?classroom=1.
+// The ordinary student flow and existing recording data remain unchanged.
+const CLASSROOM_MODE = new URLSearchParams(window.location.search).get('classroom') === '1';
+
+/* Students can always stop manually; each task also has a firm time limit. */
 const RECORDING_LIMITS = {
   speech:10,
   happyBirthday:25,
@@ -524,11 +540,31 @@ const RECORDING_LIMITS = {
   leapEcho:8,
 };
 
+const CLASSROOM_RECORDING_LIMITS = {
+  speech:12, happyBirthday:40, scaleEcho:16, sustainedLoo:10, leapEcho:14
+};
+
+function recordingLimit(kind){
+  return CLASSROOM_MODE ? CLASSROOM_RECORDING_LIMITS[kind] : RECORDING_LIMITS[kind];
+}
+
+// No signal is never treated as proof of a voice characteristic. Silence
+// detection requires a prior sound onset; a hard limit covers silent clips.
+const CLASSROOM_MIN_SECONDS = {
+  speech:5, happyBirthday:15, scaleEcho:7, sustainedLoo:5.5, leapEcho:5.5
+};
+
+const CLASSROOM_QUIET_SECONDS = {
+  speech:3, happyBirthday:4.5, scaleEcho:4.5, sustainedLoo:3, leapEcho:4
+};
+
 function recordingControls(message){
   return (
     '<div class="recording"><span class="dot"></span>' + message + '</div>' +
     '<div class="btnrow"><button class="primary bigbtn" onclick="stopManual()">Stop recording</button></div>' +
-    '<p class="small muted">Tap Stop when you finish. If you forget, it will stop automatically.</p>'
+    (CLASSROOM_MODE
+      ? '<p class="small muted">Sing the whole answer. It will stop after a longer quiet pause, or you can tap Stop.</p>'
+      : '<p class="small muted">Tap Stop when you finish. If you forget, it will stop automatically.</p>')
   );
 }
 
@@ -745,7 +781,7 @@ function startTranslationObserver(){
  * STATE
  ********************************************************************/
 
-const CLIENT_VERSION = '2026-10-01 vNext2.12';
+const CLIENT_VERSION = '2026-10-02 vNext2.13 Microphone Reliability';
 
 function getClientStartToken(){
   const key='galvin-vd-client-start-token';
@@ -791,19 +827,6 @@ let state = {
 
 let pending = {};
 let reqSeq = 0;
-
-// Direct entry is allowed. The microphone page still needs the Apps Script
-// launcher open as its backend bridge, so a direct/bookmarked visit routes
-// automatically to the public launcher instead of displaying a Classroom gate.
-const PUBLIC_LAUNCHER_URL = 'https://script.google.com/macros/s/AKfycbxCPScBLQ4MBym6RmhKFXieeHKthdvFwLzqGurNAHihTPBnASJzuw0AjhQo5vYUW_9Mug/exec';
-const STATION_MODE = new URLSearchParams(window.location.search).get('station') === '1';
-let stationInitStarted = false;
-
-function redirectToLauncher(){
-  const lang = encodeURIComponent((state && state.lang) ? state.lang : 'en');
-  const target = PUBLIC_LAUNCHER_URL + '?source=direct&lang=' + lang + '&v=214&cb=' + Date.now();
-  window.location.replace(target);
-}
 
 const TOTAL_STEPS = 8;
 
@@ -988,40 +1011,16 @@ window.addEventListener(
       return;
     }
 
-    if (!message || message.source !== 'galvin-vd-backend'){
+    if (
+      !message ||
+      message.source !== 'galvin-vd-backend' ||
+      !message.reqId
+    ){
       return;
     }
 
-    if (STATION_MODE && message.type === 'station_init' && message.payload){
-      if (stationInitStarted) return;
-      stationInitStarted = true;
-
-      const payload = message.payload;
-      const lang = LANGUAGE_LABELS[payload.lang] ? payload.lang : 'en';
-      state.lang = lang;
-      state.studentId = String(payload.studentId || '').trim();
-      state.lastName = String(payload.lastName || '').trim();
-      state.enrollment = payload.enrollment || null;
-      try{ localStorage.setItem('galvinVdLanguage', lang); }catch(e){}
-      document.documentElement.lang = lang;
-      document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
-      const select = document.getElementById('globalLanguage');
-      if (select) select.value = lang;
-
-      if (!state.studentId || !state.lastName || !state.enrollment){
-        app().innerHTML = '<div class="card"><div class="status bad">Student information could not be loaded. Return to the Voice Discovery station and try again.</div></div>';
-        return;
-      }
-
-      chooseEnrollment(state.enrollment);
-      return;
-    }
-
-    if (!message.reqId){
-      return;
-    }
-
-    const slot = pending[message.reqId];
+    const slot =
+      pending[message.reqId];
 
     if (!slot){
       return;
@@ -1029,10 +1028,22 @@ window.addEventListener(
 
     delete pending[message.reqId];
 
-    if (message.response && message.response.ok){
-      slot.resolve(message.response.data);
+    if (
+      message.response &&
+      message.response.ok
+    ){
+      slot.resolve(
+        message.response.data
+      );
     } else {
-      slot.reject(new Error(message.response && message.response.error ? message.response.error : 'Backend error.'));
+      slot.reject(
+        new Error(
+          message.response &&
+          message.response.error
+            ? message.response.error
+            : 'Backend error.'
+        )
+      );
     }
   }
 );
@@ -1043,11 +1054,10 @@ function api(action, payload){
   payload = payload || {};
 
   if (!window.opener || window.opener.closed){
-    // No Classroom requirement. A direct/bookmarked visit simply returns to
-    // the public launcher so the secure Apps Script bridge can be established.
-    redirectToLauncher();
     return Promise.reject(
-      new Error('Opening the Voice Discovery launcher...')
+      new Error(
+        'Please start Voice Discovery from the school Voice Discovery link in Google Classroom.'
+      )
     );
   }
 
@@ -1157,10 +1167,10 @@ function showWelcome(){
       <form id="loginForm" novalidate>
         <div class="loginGrid">
           <div>
-            <label id="studentEmailLabel" for="studentId">Student email</label>
-            <div class="emailField" id="emailField" role="group" aria-labelledby="studentEmailLabel">
-              <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" aria-label="Student number" placeholder="student number">
-              <span class="emailSuffix" id="emailSuffix" aria-hidden="true">@wpsstudent.org</span>
+            <label for="studentId">School email</label>
+            <div class="emailField" id="emailField">
+              <input id="studentId" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="next" placeholder="student number">
+              <span class="emailSuffix" id="emailSuffix" role="button" tabindex="-1">@wpsstudent.org</span>
             </div>
           </div>
           <div>
@@ -1242,8 +1252,6 @@ async function lookup(){
     document
       .getElementById('studentId')
       .value
-      .trim()
-      .replace(/@wpsstudent\.org$/i,'')
       .trim();
 
   const lastName =
@@ -1482,282 +1490,208 @@ function showMicSetup(firstName){
       <p>Click <b>Enable microphone</b>. If your browser asks, choose <b>Allow</b>.</p>
       <p class="small">You will not have to listen to your own recordings.</p>
       <div class="btnrow compactButtons">
-        <button class="primary bigbtn" onclick="enableMic()">Enable microphone</button>
+        <button class="primary bigbtn" id="enableMicButton" onclick="enableMic()">Enable microphone</button>
       </div>
-      <div id="micArea"></div>
+      <p class="small">Microphone update 2.13 · ${CLASSROOM_MODE ? 'School mode' : 'Home mode'}</p><div id="micArea"></div>
     </div>
   `;
 }
 
 
-async function enableMic(){
+// Microphone setup changes stay local. Device IDs and labels are never uploaded.
+let micBusy = false;
+let micTesting = false;
+let micCompatibility = false;
+const MIC_SIGNAL_FLOOR = 0.001;
 
-  state.currentStage='microphone_permission';
-  const area =
-    document.getElementById('micArea');
+function withAudioTimeout(promise, milliseconds, message){
+  let timer;
+  return Promise.race([promise, new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), milliseconds);
+  })]).finally(() => clearTimeout(timer));
+}
 
+function releaseMic(){
+  cancelAnimationFrame(state.meterRAF);
+  if (state.stream) state.stream.getTracks().forEach(t => t.stop());
+  if (state.micSource) { try { state.micSource.disconnect(); } catch(e){} }
+  state.stream = null;
+  state.micSource = null;
+  state.analyser = null;
+}
 
+async function wakeAudio(){
+  if (!state.audioCtx || state.audioCtx.state === 'closed'){
+    state.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  if (state.audioCtx.state !== 'running'){
+    await withAudioTimeout(state.audioCtx.resume(), 5000,
+      'Audio is paused. Keep this tab visible and click Test microphone again.');
+  }
+  if (state.audioCtx.state !== 'running') throw new Error('Audio is paused. Keep this tab visible and try again.');
+}
+
+function micControlsDisabled(disabled){
+  ['enableMicButton','micSelect','micTestButton','micReconnect','micCompatibility'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled;
+  });
+}
+
+async function enableMic(deviceId, compatibility){
+  if (micBusy || micTesting) return;
+  micBusy = true;
+  micControlsDisabled(true);
+  state.currentStage = 'microphone_permission';
+  const area = document.getElementById('micArea');
+  if (typeof compatibility === 'boolean') micCompatibility = compatibility;
+  let permissionTimer;
   try{
-
-    state.stream =
-      await navigator
-        .mediaDevices
-        .getUserMedia(
-          {
-            audio:{
-              echoCancellation:true,
-              noiseSuppression:false,
-              autoGainControl:false
-            }
-          }
-        );
-
-
-    state.audioCtx =
-      new (
-        window.AudioContext ||
-        window.webkitAudioContext
-      )();
-
-    // Chrome may create Web Audio in a suspended state after the
-    // permission prompt. Try to activate it now; runMicTest() tries
-    // again from its own button click before validating signal level.
-    try{
-      if (state.audioCtx.state === 'suspended'){
-        await state.audioCtx.resume();
-      }
-    } catch(e){}
-
-
-    const source =
-      state.audioCtx
-        .createMediaStreamSource(
-          state.stream
-        );
-
-
-    state.analyser =
-      state.audioCtx
-        .createAnalyser();
-
-
-    state.analyser.fftSize =
-      512;
-
-
-    source.connect(
-      state.analyser
-    );
-
-
+    if (!window.isSecureContext || !navigator.mediaDevices?.getUserMedia){
+      throw new Error('Open Voice Discovery from the original school link in a normal browser tab. Microphone access is unavailable here.');
+    }
+    // Create and resume on the button gesture, before the permission prompt.
+    const waking = wakeAudio().catch(() => {});
+    releaseMic();
+    area.innerHTML = '<div class="status warn" role="status">Waiting for microphone access. Choose Allow if your browser asks.</div>';
+    permissionTimer = setTimeout(() => {
+      if (micBusy && area.isConnected) area.innerHTML = '<div class="status warn">Still waiting. Check the microphone permission prompt near the address bar. If it is hidden, reload this page and try again.</div>';
+    }, 12000);
+    // Normal mode preserves singing detail but allows automatic input gain.
+    // Compatibility mode leaves all processing to the browser.
+    const audio = micCompatibility ? {} : {
+      echoCancellation:true, noiseSuppression:false, autoGainControl:true
+    };
+    if (deviceId) audio.deviceId = {exact:deviceId};
+    state.stream = await navigator.mediaDevices.getUserMedia({audio, video:false});
+    clearTimeout(permissionTimer);
+    await waking;
+    const track = state.stream.getAudioTracks()[0];
+    if (!track || track.readyState !== 'live') throw new Error('No active microphone input was found. Reconnect the microphone and try again.');
+    state.micSource = state.audioCtx.createMediaStreamSource(state.stream);
+    state.analyser = state.audioCtx.createAnalyser();
+    state.analyser.fftSize = 2048;
+    state.micSource.connect(state.analyser);
+    let devices = [];
+    try { devices = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'audioinput'); } catch(e){}
+    const selected = track.getSettings ? track.getSettings().deviceId : '';
     area.innerHTML = `
-
-      <div class="status ok">
-        <b>
-          Microphone allowed ✓
-        </b>
-      </div>
-
-      <p>
-        Click <b>Test microphone</b>, then say “hello” normally while you watch the meter. If the meter does not move, check that your microphone is not muted.
-      </p>
-
-      <div class="meter">
-        <div id="meterFill"></div>
-      </div>
-
+      <div class="status ok">Microphone access allowed. Now check that we can hear you.</div>
+      <div><label for="micSelect"><b>Microphone</b></label><br>
+      <select id="micSelect" onchange="enableMic(this.value)">
+        <option value="">Browser default</option>
+        ${devices.map((d,i) => `<option value="${esc(d.deviceId)}" ${d.deviceId===selected?'selected':''}>${esc(d.label || 'Microphone '+(i+1))}</option>`).join('')}
+      </select></div>
+      <p>Click <b>Test microphone</b> and say “Hello, I am ready to sing.” If the meter stays still, choose another microphone above.</p>
+      <div class="meter"><div id="meterFill"></div></div>
       <div class="btnrow">
-
-        <button
-          class="good"
-          onclick="runMicTest()">
-
-          Test microphone
-
-        </button>
-
+        <button id="micTestButton" class="good" onclick="runMicTest()">Test microphone</button>
+        <button id="micReconnect" class="secondary" onclick="enableMic(document.getElementById('micSelect').value)">Reconnect microphone</button>
+        <button id="micCompatibility" class="secondary" onclick="enableMic(document.getElementById('micSelect').value, true)">Try browser-default audio</button>
       </div>
-
-      <div id="testMsg"></div>
-    `;
-
-
-    runMeter();
-
-  } catch(err){
-
-    const friendly=friendlyMediaError(err);
-    logDiagnostic('microphone_error', friendly, {
-      errorName:err && err.name ? err.name : ''
+      <div id="testMsg" role="status" aria-live="polite"></div>
+      <details><summary>Technical details for help</summary>
+        <p>No student information is included here.</p><pre id="micDetails"></pre>
+      </details>`;
+    track.addEventListener('ended', () => {
+      const msg = document.getElementById('testMsg');
+      if (msg) msg.innerHTML = '<div class="status warn">Microphone disconnected. Reconnect it and test again.</div>';
     });
-
-    area.innerHTML = `
-
-      <div class="status bad">
-        <b>Microphone could not start.</b><br>
-        ${esc(friendly)}
-      </div>
-
-      ${technicalHelpHtml()}
-    `;
+    runMeter();
+    updateMicDetails();
+  } catch(err){
+    releaseMic();
+    const message = err.name === 'OverconstrainedError'
+      ? 'That microphone is no longer available. Click Enable microphone to use the browser default.'
+      : (['NotAllowedError','SecurityError','NotFoundError','NotReadableError','AbortError'].includes(err.name)
+        ? friendlyMediaError(err) : err.message);
+    area.innerHTML = '<div class="status bad">'+esc(message)+'</div>'+technicalHelpHtml();
+    logDiagnostic('microphone_error', 'Microphone setup failed', {errorName:err.name || 'Error'});
+  } finally {
+    clearTimeout(permissionTimer);
+    micBusy = false;
+    micControlsDisabled(false);
     schedulePageTranslation();
   }
 }
 
+function updateMicDetails(extra){
+  const el = document.getElementById('micDetails');
+  if (!el) return;
+  const track = state.stream?.getAudioTracks()[0];
+  el.textContent = CLIENT_VERSION+'\nMode: '+(CLASSROOM_MODE?'School':'Home')+
+    '\nAudio: '+(state.audioCtx?.state || 'unavailable')+
+    '\nInput: '+(track?.readyState || 'unavailable')+
+    '\nMuted by device: '+!!track?.muted+
+    '\nAudio settings: '+(micCompatibility?'browser default':'singing')+
+    (extra ? '\n'+extra : '');
+}
 
 function runMeter(){
-
-  cancelAnimationFrame(
-    state.meterRAF
-  );
-
-
-  const data =
-    new Uint8Array(
-      state.analyser.fftSize
-    );
-
-
+  cancelAnimationFrame(state.meterRAF);
   function tick(){
-
-    state.analyser
-      .getByteTimeDomainData(
-        data
-      );
-
-
-    let sum = 0;
-
-
-    for (const value of data){
-
-      const x =
-        (value - 128) / 128;
-
-      sum += x * x;
-    }
-
-
-    const rms =
-      Math.sqrt(
-        sum / data.length
-      );
-
-
-    const fill =
-      document.getElementById(
-        'meterFill'
-      );
-
-
-    if (fill){
-
-      fill.style.width =
-        Math.min(
-          100,
-          rms * 550
-        ) + '%';
-    }
-
-
-    state.meterRAF =
-      requestAnimationFrame(
-        tick
-      );
+    const fill = document.getElementById('meterFill');
+    if (!fill || !state.analyser) return;
+    const level = currentLevel();
+    fill.style.width = Math.min(100, Math.sqrt(level)*220)+'%';
+    state.meterRAF = requestAnimationFrame(tick);
   }
-
-
   tick();
 }
 
-
-async function runMicTest(){
-
-  const msg =
-    document.getElementById(
-      'testMsg'
-    );
-
-  // This button click is a fresh user gesture, so it is the most
-  // reliable place to wake Chrome's Web Audio analyser.
+// Check encoded audio separately from the live meter. Some browsers cannot
+// decode their recording format; in that case require a working live analyzer.
+async function recordedSignal(blob){
   try{
-    if (state.audioCtx && state.audioCtx.state === 'suspended'){
-      await state.audioCtx.resume();
+    const buffer = await withAudioTimeout(
+      state.audioCtx.decodeAudioData(await blob.arrayBuffer()), 5000, 'Decode timed out');
+    let peakRms = 0;
+    for (let c=0; c<buffer.numberOfChannels; c++){
+      const samples = buffer.getChannelData(c);
+      for (let start=0; start<samples.length; start+=2048){
+        const end = Math.min(start+2048,samples.length);
+        let sum = 0;
+        for (let i=start; i<end; i++) sum += samples[i]*samples[i];
+        peakRms = Math.max(peakRms,Math.sqrt(sum/(end-start)));
+      }
     }
-  } catch(e){}
-
-
-  msg.innerHTML =
-    '<div class="status warn">' +
-    'Say “hello” now…' +
-    '</div>';
-
-
-  try{
-
-    const recording =
-      await captureAudio(
-        2.5,
-        false
-      );
-
-
-    const analyserRunning =
-      state.audioCtx &&
-      state.audioCtx.state === 'running';
-
-    const signalTooQuiet =
-      analyserRunning &&
-      recording.maxLevel < 0.0025;
-
-    if (
-      recording.blob.size < 800 ||
-      signalTooQuiet
-    ){
-
-      msg.innerHTML =
-
-        '<div class="status warn">' +
-
-        'I did not hear much sound. ' +
-        'Move a little closer and try once more.' +
-
-        '</div>';
-
-      return;
-    }
-
-
-    msg.innerHTML =
-
-      '<div class="status ok">' +
-
-      '<b>Microphone working ✓</b> ' +
-
-      'Your test was captured. ' +
-      'It was not saved and you do not need to hear it.' +
-
-      '</div>' +
-
-      '<div class="btnrow">' +
-
-      '<button class="primary bigbtn" onclick="showSpeech()">' +
-
-      'Start Voice Discovery' +
-
-      '</button>' +
-
-      '</div>';
-
-  } catch(err){
-
-    msg.innerHTML =
-      '<div class="status bad">' +
-      esc(err.message) +
-      '</div>';
-  }
+    return peakRms;
+  } catch(e){ return null; }
 }
 
+async function runMicTest(){
+  if (micBusy || micTesting) return;
+  micTesting = true;
+  micControlsDisabled(true);
+  const msg = document.getElementById('testMsg');
+  try{
+    await wakeAudio();
+    msg.innerHTML = '<div class="status warn">Say “Hello, I am ready to sing” now…</div>';
+    const recording = await captureAudio(4,false);
+    const decoded = await recordedSignal(recording.blob);
+    const liveOK = recording.maxLevel >= MIC_SIGNAL_FLOOR;
+    const recordedOK = decoded !== null ? decoded >= MIC_SIGNAL_FLOOR : liveOK;
+    updateMicDetails('Live level: '+recording.maxLevel.toFixed(5)+
+      '\nRecorded level: '+(decoded===null?'decoder unavailable':decoded.toFixed(5))+
+      '\nRecording bytes: '+recording.blob.size);
+    if (!recording.blob.size || !recordedOK){
+      msg.innerHTML = '<div class="status warn">We could not hear enough sound yet. Check the microphone mute switch, choose another microphone above, or try browser-default audio. Then test again.</div>';
+      return;
+    }
+    if (!liveOK || state.audioCtx.state !== 'running'){
+      msg.innerHTML = '<div class="status warn">Your recording contains sound, but the live sound checker is not working. Click Reconnect microphone and test again before starting.</div>';
+      return;
+    }
+    msg.innerHTML = '<div class="status ok"><b>Microphone working ✓</b> Sound was detected and a recording was captured. This test was not uploaded.</div><div class="btnrow"><button class="primary bigbtn" onclick="showSpeech()">Start Voice Discovery</button></div>';
+  } catch(err){
+    msg.innerHTML = '<div class="status bad">'+esc(err.message)+'</div><p>Reconnect the microphone above, then test again.</p>';
+    updateMicDetails('Test: '+(err.name || 'Error'));
+  } finally {
+    micTesting = false;
+    micControlsDisabled(false);
+    schedulePageTranslation();
+  }
+}
 
 /********************************************************************
  * RECORDING ENGINE
@@ -1790,52 +1724,32 @@ function recorderMime(){
 
 
 function currentLevel(){
-
-  if (!state.analyser){
-    return 0;
-  }
-
-
-  const data =
-    new Uint8Array(
-      state.analyser.fftSize
-    );
-
-
-  state.analyser
-    .getByteTimeDomainData(
-      data
-    );
-
-
+  if (!state.analyser || state.audioCtx?.state !== 'running') return 0;
+  const data = new Float32Array(state.analyser.fftSize);
+  state.analyser.getFloatTimeDomainData(data);
   let sum = 0;
-
-
-  for (const value of data){
-
-    const x =
-      (value - 128) / 128;
-
-    sum += x * x;
-  }
-
-
-  return Math.sqrt(
-    sum / data.length
-  );
+  for (const value of data) sum += value*value;
+  return Math.sqrt(sum/data.length);
 }
-
 
 async function captureAudio(
   seconds,
-  manual
+  manual,
+  classroomKind
 ){
+
+  await wakeAudio();
 
   if (!state.stream || !state.stream.active){
     const err=new Error('The microphone connection was lost. Return to Step 1 or reload Voice Discovery.');
     err.name='MicrophoneDisconnected';
     logDiagnostic('recording_error',err.message,{errorName:err.name});
     throw err;
+  }
+
+  const inputTrack = state.stream.getAudioTracks()[0];
+  if (!inputTrack || inputTrack.readyState !== 'live' || !inputTrack.enabled || inputTrack.muted){
+    throw new Error('The microphone is muted or disconnected. Check the device and try again.');
   }
 
   const mime =
@@ -1852,10 +1766,16 @@ async function captureAudio(
 
 
   const chunks = [];
+  let recordingWatchdog = null;
 
   let maxLevel = 0;
 
   let levelTimer = null;
+  let soundStarted = false;
+  let onsetMs = 0;
+  let lastSoundMs = 0;
+  const minSeconds = CLASSROOM_MIN_SECONDS[classroomKind] || 0;
+  const quietSeconds = CLASSROOM_QUIET_SECONDS[classroomKind] || 4;
 
 
   recorder.ondataavailable =
@@ -1880,8 +1800,23 @@ async function captureAudio(
     new Promise(
       function(resolve, reject){
 
+        recordingWatchdog = setTimeout(function(){
+          clearInterval(levelTimer);
+          clearTimeout(state._manualStopTimer);
+          try { if (recorder.state !== "inactive") recorder.stop(); } catch(e){}
+          state._manualRecorder = null;
+          state._manualStopTimer = null;
+          reject(new Error("Recording did not finish. Check the microphone and try again."));
+        }, (seconds > 0 ? seconds * 1000 : 120000) + 10000);
+
         recorder.onerror =
           function(event){
+
+            clearTimeout(recordingWatchdog);
+            clearInterval(levelTimer);
+            clearTimeout(state._manualStopTimer);
+            state._manualStopTimer = null;
+            state._manualRecorder = null;
 
             reject(
               event.error ||
@@ -1894,11 +1829,20 @@ async function captureAudio(
 
         recorder.onstop =
           function(){
+            clearTimeout(recordingWatchdog);
 
             clearInterval(
               levelTimer
             );
 
+
+            if (inputTrack.readyState !== 'live' || inputTrack.muted) {
+              clearTimeout(state._manualStopTimer);
+              state._manualRecorder = null;
+              state._manualStopTimer = null;
+              reject(new Error('Microphone disconnected or muted during recording. Reconnect it and try again.'));
+              return;
+            }
 
             const blob =
               new Blob(
@@ -1930,20 +1874,40 @@ async function captureAudio(
     );
 
 
-  recorder.start(
-    250
-  );
+  try {
+    recorder.start(250);
+  } catch(err) {
+    clearTimeout(recordingWatchdog);
+    throw err;
+  }
 
 
   levelTimer =
     setInterval(
       function(){
 
-        maxLevel =
-          Math.max(
-            maxLevel,
-            currentLevel()
-          );
+        const level = currentLevel();
+        maxLevel = Math.max(maxLevel, level);
+
+        if (CLASSROOM_MODE && manual && classroomKind &&
+            state.audioCtx && state.audioCtx.state === 'running'){
+          const now = Date.now();
+          // Conservative onset threshold. Room noise may keep a recording
+          // going to its time limit; it cannot cause an early silent stop.
+          if (level >= 0.006){
+            if (!onsetMs) onsetMs = now;
+            if (now - onsetMs >= 300){
+              soundStarted = true;
+              lastSoundMs = now;
+            }
+          } else {
+            onsetMs = 0;
+          }
+          if (soundStarted && now - startMs >= minSeconds*1000 &&
+              now - lastSoundMs >= quietSeconds*1000 && recorder.state === 'recording'){
+            recorder.stop();
+          }
+        }
 
       },
       75
@@ -2608,7 +2572,17 @@ async function queueRecordingReview(config){
   if (['happy','pattern','sustain','leap'].includes(config.kind)){
     config.analysis = await analyzeRecording(config);
   }
-  renderPendingReview();
+  // In-school flow removes the extra "Use this recording" tap only when
+  // the clip has a plausible signal and analysis did not request review.
+  // Unclear clips still allow the existing single retry or explicit use.
+  const lowSignal = config.recording.blob.size < 800 ||
+    config.recording.maxLevel < MIC_SIGNAL_FLOOR;
+  if (CLASSROOM_MODE && !lowSignal &&
+      (!config.analysis || !config.analysis.needsReview)){
+    await usePendingRecording();
+  } else {
+    renderPendingReview();
+  }
 }
 
 function renderPendingReview(){
@@ -2619,9 +2593,9 @@ function renderPendingReview(){
 
   const usedRetries = state.recordingRetries[review.key] || 0;
   area.innerHTML = `
-    <div class="status ok"><b>Recording captured ✓</b></div>
+    <div class="status ${review.recording.maxLevel < MIC_SIGNAL_FLOOR ? 'warn' : 'ok'}"><b>${review.recording.maxLevel < MIC_SIGNAL_FLOOR ? 'Very little sound detected' : 'Recording captured ✓'}</b></div>
     ${reviewHint(review)}
-    <p>You do not need to listen to it. Use this recording, or try it one more time if you want.</p>
+    <p>You do not need to listen to it. ${review.recording.maxLevel < MIC_SIGNAL_FLOOR ? 'Check that the microphone is on. You can try again, or save this attempt for Mr. Zini to review.' : 'Use this recording, or try it one more time if you want.'}</p>
     <div class="btnrow">
       <button class="primary bigbtn" onclick="usePendingRecording()">Use this recording</button>
       ${usedRetries < 1 ? '<button class="secondary bigbtn" onclick="retryPendingRecording()">Try again</button>' : ''}
@@ -2646,7 +2620,8 @@ async function saveReviewAnalysis(review){
 
 async function usePendingRecording(){
   const review = state._pendingReview;
-  if (!review) return;
+  if (!review || state._savingPending) return;
+  state._savingPending = true;
   disableButtons();
   const area = document.getElementById(review.areaId);
   if (area) area.innerHTML = '<div class="status warn">Saving securely…</div>';
@@ -2674,6 +2649,9 @@ async function usePendingRecording(){
       // summary can distinguish range/comfort from octave matching.
       state._currentPattern.analysis = review.analysis || null;
       area.innerHTML = comfortButtons(review.exerciseId, review.attempt || 1);
+      if (CLASSROOM_MODE) setTimeout(function(){
+        if (area && area.isConnected) area.scrollIntoView({behavior:'smooth',block:'nearest'});
+      }, 90);
     } else if (review.kind === 'sustain'){
       area.innerHTML = '<div class="status ok">Perfect — got it! ✓</div><div class="btnrow"><button class="primary" onclick="showLeap()">Continue</button></div>';
     } else if (review.kind === 'leap'){
@@ -2681,6 +2659,18 @@ async function usePendingRecording(){
     }
 
     schedulePageTranslation();
+    if (CLASSROOM_MODE){
+      const nextStep = {
+        speech:showHappyBirthday, happy:beginPatterns,
+        sustain:showLeap, leap:showFinish
+      }[review.kind];
+      if (nextStep){
+        const savedStage = state.currentStage;
+        setTimeout(function(){
+          if (state.currentStage === savedStage && !state._pendingReview) nextStep();
+        }, 1800);
+      }
+    }
   } catch(err){
     logDiagnostic('save_recording_error', err && err.message ? err.message : 'Could not save recording', {
       errorName:err && err.name ? err.name : '',
@@ -2688,6 +2678,8 @@ async function usePendingRecording(){
     });
     if (area) area.innerHTML = '<div class="status bad">' + esc(err.message) + '</div>' + technicalHelpHtml() + '<div class="btnrow"><button class="secondary" onclick="renderPendingReview()">Back</button></div>';
     schedulePageTranslation();
+  } finally {
+    state._savingPending = false;
   }
 }
 
@@ -2783,7 +2775,7 @@ async function recordSpeech(){
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.speech, true);
+    const recording = await captureAudio(recordingLimit('speech'), true, 'speech');
     queueRecordingReview({
       kind:'speech', key:'speech', areaId:'taskMsg',
       exerciseId:'SPEECH_20_TO_15', exerciseType:'speech',
@@ -2836,7 +2828,7 @@ async function recordHappy(){
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.happyBirthday, true);
+    const recording = await captureAudio(recordingLimit('happyBirthday'), true, 'happyBirthday');
     queueRecordingReview({
       kind:'happy', key:'happy', areaId:'taskMsg',
       exerciseId:'HAPPY_BIRTHDAY_FULL', exerciseType:'natural_song_full',
@@ -3120,7 +3112,7 @@ function drawContour(
 
 
   const width = 760;
-  const height = 235;
+  const height = 255;
 
   const left = 50;
   const right = 50;
@@ -3230,7 +3222,8 @@ function drawContour(
         ys[i] +
         '">' +
         solfege[i] +
-        '</text>';
+        '</text>' +
+        '<text class="looText" x="' + x + '" y="' + (ys[i] + 42) + '">loo</text>';
     }
   );
 
@@ -3472,7 +3465,7 @@ function showPattern(
         class="contourWrap">
       </div>
 
-      <div class="btnrow">
+      <div class="btnrow" id="patternListenControls">
 
         <button
           class="primary bigbtn"
@@ -3501,6 +3494,8 @@ function showPattern(
 async function listenCurrent(){
 
   disableButtons();
+  const listenControls = document.getElementById('patternListenControls');
+  if (CLASSROOM_MODE && listenControls) listenControls.style.display='none';
 
 
   const pattern =
@@ -3526,7 +3521,9 @@ async function listenCurrent(){
     .getElementById(
       'patternAction'
     )
-    .innerHTML = `
+    .innerHTML = CLASSROOM_MODE ? `
+      <div class="status ok">Your turn — sing each note on <b>“loo.”</b> Recording begins after the countdown.</div>
+    ` : `
 
       <div class="status ok">
         Your turn — sing it back on <b>“loo.”</b>
@@ -3544,6 +3541,8 @@ async function listenCurrent(){
 
       </div>
     `;
+
+  if (CLASSROOM_MODE) await recordCurrentPattern();
 }
 
 
@@ -3556,7 +3555,7 @@ async function recordCurrentPattern(){
 
   const pattern = state._currentPattern;
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.scaleEcho, true);
+    const recording = await captureAudio(recordingLimit('scaleEcho'), true, 'scaleEcho');
     const exerciseId = 'SCALE_' + pattern.meta.tonic.replace('b','FLAT').replace('#','SHARP');
     queueRecordingReview({
       kind:'pattern', key:'pattern:' + exerciseId, areaId:'patternAction',
@@ -3577,13 +3576,12 @@ function comfortButtons(
 
   return `
 
-    <h3>
-      Nice! How did that feel?
-    </h3>
+    <div class="comfortQuestion"><h3>How did that pattern feel?</h3>
+    <p class="small">Choose one. Your answer picks the next pitch.</p></div>
 
     ${languageHelp('comfort')}
 
-    <div class="comforts">
+    <div class="patternComforts" role="group" aria-label="How did the singing pattern feel?">
 
       <button
         onclick="patternComfort('Easy','${exerciseId}',${attempt})">
@@ -3596,11 +3594,13 @@ function comfortButtons(
       </button>
 
       <button
+        class="rangeWarning"
         onclick="patternComfort('Too high','${exerciseId}',${attempt})">
         Too high
       </button>
 
       <button
+        class="rangeWarning"
         onclick="patternComfort('Too low','${exerciseId}',${attempt})">
         Too low
       </button>
@@ -3608,9 +3608,6 @@ function comfortButtons(
 
     </div>
 
-    <p class="small">
-      Your answer helps choose the next pattern. There is no wrong answer.
-    </p>
   `;
 }
 
@@ -4167,6 +4164,11 @@ function showStep4Complete_(){
     </div>
   `;
   schedulePageTranslation();
+  if (CLASSROOM_MODE){
+    setTimeout(function(){
+      if (state.currentStage === 'step4_complete') continueAfterStep4_();
+    }, review ? 5000 : 2500);
+  }
 }
 
 function continueAfterStep4_(){
@@ -4318,7 +4320,9 @@ async function listenSustain(){
     .getElementById(
       'sustainAction'
     )
-    .innerHTML = `
+    .innerHTML = CLASSROOM_MODE ? `
+      <p>Your turn! Hold <b>“loo”</b> comfortably. Recording begins after the countdown.</p>
+    ` : `
 
       <p>
         Your turn! Hold <b>“loo”</b> comfortably for about 4 seconds.
@@ -4336,6 +4340,8 @@ async function listenSustain(){
 
       </div>
     `;
+
+  if (CLASSROOM_MODE) await recordSustain();
 }
 
 
@@ -4347,7 +4353,7 @@ async function recordSustain(){
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.sustainedLoo, true);
+    const recording = await captureAudio(recordingLimit('sustainedLoo'), true, 'sustainedLoo');
     const pitchName = nameForMidi(state._sustainMidi);
     queueRecordingReview({
       kind:'sustain', key:'sustain', areaId:'sustainAction',
@@ -4458,7 +4464,9 @@ async function listenLeap(){
     .getElementById(
       'leapAction'
     )
-    .innerHTML = `
+    .innerHTML = CLASSROOM_MODE ? `
+      <p>Your turn! Sing each note on <b>“loo.”</b> Recording begins after the countdown.</p>
+    ` : `
 
       <div class="status ok">
         Your turn!
@@ -4480,6 +4488,8 @@ async function listenLeap(){
 
       </div>
     `;
+
+  if (CLASSROOM_MODE) await recordLeap();
 }
 
 
@@ -4491,7 +4501,7 @@ async function recordLeap(){
   schedulePageTranslation();
 
   try{
-    const recording = await captureAudio(RECORDING_LIMITS.leapEcho, true);
+    const recording = await captureAudio(recordingLimit('leapEcho'), true, 'leapEcho');
     const midis = LEAP_INTERVALS.map(function(interval){ return state._leapTonic + interval; });
     const tonicName = nameForMidi(state._leapTonic);
     queueRecordingReview({
@@ -4579,6 +4589,10 @@ async function finalize(
   overallComfort
 ){
 
+  if (state._finalizing) return;
+  state._finalizing = true;
+  state._finishComfort = overallComfort;
+
   state.currentStage='finalize';
   disableButtons();
 
@@ -4615,25 +4629,17 @@ async function finalize(
     );
 
 
-    if (state.stream){
+    releaseMic();
+    if (state.audioCtx) { try { await state.audioCtx.close(); } catch(e){} }
 
-      state.stream
-        .getTracks()
-        .forEach(
-          function(track){
-
-            track.stop();
-          }
-        );
-    }
-
-
-    cancelAnimationFrame(
-      state.meterRAF
-    );
-
-
-    app().innerHTML = `
+    state.currentStage='submitted';
+    app().innerHTML = CLASSROOM_MODE ? `
+      <div class="card">
+        <h2>Submitted successfully ✓</h2>
+        <p>Tell Mr. Zini you are finished.</p>
+        <p class="muted">The next student’s sign-in page will appear in a few seconds.</p>
+      </div>
+    ` : `
 
       <div class="card">
 
@@ -4657,18 +4663,15 @@ async function finalize(
           <b>Your Voice Discovery was submitted successfully.</b> Your voice was not graded or scored. You’re finished — nice work!
         </p>
 
-        <div class="status ok" id="nextStudentStatus">
-          Ready for the next student in <b><span id="nextStudentCountdown">8</span></b> seconds…
-        </div>
-
-        <div class="btnrow">
-          <button class="primary" onclick="resetForNextStudent()">Next student now</button>
-        </div>
-
       </div>
     `;
 
-    startNextStudentCountdown();
+    if (CLASSROOM_MODE){
+      // A new page load clears every student-facing input and generates a
+      // fresh START token. Do this only after the server confirms submission.
+      try{ sessionStorage.removeItem('galvin-vd-client-start-token'); }catch(e){}
+      setTimeout(function(){ window.location.reload(); }, 6000);
+    }
 
   } catch(err){
 
@@ -4680,62 +4683,17 @@ async function finalize(
       '<div class="status bad">' +
       esc(err.message) +
       '</div>' +
+      '<p>Nothing needs to be recorded again. Keep this page open and try submitting once more.</p>' +
+      '<button class="primary bigbtn" onclick="retryFinalize()">Try submitting again</button>' +
       technicalHelpHtml();
     schedulePageTranslation();
+  } finally {
+    state._finalizing = false;
   }
 }
 
-
-/********************************************************************
- * SHARED-DEVICE RESET
- *
- * Reloading this student tab is intentional: it clears every student-specific
- * variable, recording object, retry count, and assessment state. The opener
- * (Apps Script launcher) remains open, so the fresh page goes directly back to
- * the Student Number + Last Name screen for the next singer.
- ********************************************************************/
-
-let nextStudentTimer = null;
-
-function resetForNextStudent(){
-  if (nextStudentTimer){
-    clearInterval(nextStudentTimer);
-    nextStudentTimer = null;
-  }
-  try{ window.speechSynthesis && window.speechSynthesis.cancel(); }catch(e){}
-
-  if (STATION_MODE && window.opener && !window.opener.closed){
-    try{
-      window.opener.postMessage({source:'galvin-vd-student', type:'station_complete'}, '*');
-      window.opener.focus();
-    }catch(e){}
-    try{ window.close(); }catch(e){}
-    setTimeout(function(){
-      if (!window.closed){
-        app().innerHTML = '<div class="card"><h2>All done!</h2><p>Your Voice Discovery was submitted successfully.</p><p class="muted">You can close this tab. The station is ready for the next student.</p></div>';
-      }
-    },250);
-    return;
-  }
-
-  window.location.replace(window.location.pathname + '?v=214&bridge=1&lang=' + encodeURIComponent(state.lang || 'en') + '&cb=' + Date.now());
-}
-
-function startNextStudentCountdown(){
-  let remaining = 8;
-  const el = document.getElementById('nextStudentCountdown');
-  if (el) el.textContent = String(remaining);
-
-  nextStudentTimer = setInterval(function(){
-    remaining -= 1;
-    const nowEl = document.getElementById('nextStudentCountdown');
-    if (nowEl) nowEl.textContent = String(Math.max(remaining,0));
-    if (remaining <= 0){
-      clearInterval(nextStudentTimer);
-      nextStudentTimer = null;
-      resetForNextStudent();
-    }
-  },1000);
+function retryFinalize(){
+  if (state._finishComfort) return finalize(state._finishComfort);
 }
 
 
@@ -4750,37 +4708,20 @@ document.documentElement.lang = state.lang || 'en';
 document.documentElement.dir = state.lang === 'ar' ? 'rtl' : 'ltr';
 
 if (!window.opener || window.opener.closed){
-  setCurrentScreen(redirectToLauncher);
+  setCurrentScreen(function(){ window.location.reload(); });
   setProgress(1);
   app().innerHTML = `
     <div class="card">
-      <h2>Opening Voice Discovery…</h2>
-      <p>Connecting to the Voice Discovery station…</p>
+      <h2>Open Voice Discovery from Google Classroom</h2>
+      ${languageHelp('direct')}
+      <p>
+        Start with the Galvin Middle School Chorus Voice Discovery link from Google Classroom.
+      </p>
+      <p class="muted">
+        Keep the first school tab open while you complete Voice Discovery.
+      </p>
     </div>
   `;
-  setTimeout(redirectToLauncher, 100);
-} else if (STATION_MODE) {
-  setCurrentScreen(function(){});
-  setProgress(1);
-  app().innerHTML = `
-    <div class="card">
-      <h2>Getting Voice Discovery ready…</h2>
-      <p class="muted">Please wait a moment.</p>
-    </div>
-  `;
-  const announceStationReady = function(){
-    if (stationInitStarted || !window.opener || window.opener.closed) return;
-    window.opener.postMessage({source:'galvin-vd-student', type:'station_ready'}, '*');
-  };
-  announceStationReady();
-  const stationReadyTimer = setInterval(function(){
-    if (stationInitStarted || !window.opener || window.opener.closed){
-      clearInterval(stationReadyTimer);
-      return;
-    }
-    announceStationReady();
-  },750);
-  setTimeout(function(){ clearInterval(stationReadyTimer); },10000);
 } else {
   showWelcome();
   const startupIssues=[];
